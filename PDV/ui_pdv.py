@@ -124,6 +124,9 @@ def criar_interface_pdv(janela):
     entry_codigo = tk.Entry(topo, width=20)
     entry_codigo.pack(side="left", padx=5)
 
+    # foco inicial no campo de código (para uso com bip)
+    entry_codigo.focus_set()
+
     tk.Label(topo, text="Qtd:", bg="#f7f7f7").pack(side="left")
     entry_qtd = tk.Entry(topo, width=5)
     entry_qtd.insert(0, "1")
@@ -160,7 +163,9 @@ def criar_interface_pdv(janela):
         pf.adicionar_item(LISTA_ITENS, item)
         atualizar_tabela(tree, label_total)
 
+        # limpa o campo de código e volta o foco pra ele (ideal para bip em sequência)
         entry_codigo.delete(0, tk.END)
+        entry_codigo.focus_set()
 
     btn_add = tk.Button(
         topo,
@@ -170,6 +175,9 @@ def criar_interface_pdv(janela):
         fg="white"
     )
     btn_add.pack(side="left", padx=8)
+
+    # ENTER no campo de código adiciona o item (modo bip)
+    entry_codigo.bind("<Return>", lambda event: on_adicionar())
 
     # --------- TABELA ---------
     colunas = ("codigo", "descricao", "qtd", "preco_unit", "subtotal")
@@ -278,3 +286,9 @@ def criar_interface_pdv(janela):
         fg="white"
     )
     btn_fin.pack(side="right")
+
+    # Atalho: F2 volta o foco para o campo de código (ajuda no caixa)
+    def focar_codigo(event=None):
+        entry_codigo.focus_set()
+
+    janela.bind("<F2>", focar_codigo)
