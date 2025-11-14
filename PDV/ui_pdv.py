@@ -4,6 +4,64 @@ import pdv_functions as pf
 from cadastro_produtos import abrir_cadastro_produtos
 from relatorios import abrir_relatorio_caixa_dia
 from etiquetas import abrir_etiquetas
+import os
+import tempfile
+
+
+def criar_icone_cacto():
+    """Cria um ícone de cacto e retorna o caminho do arquivo temporário."""
+    try:
+        from PIL import Image, ImageDraw
+        
+        # Criar imagem 32x32 para o ícone
+        img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        # Cores da marca
+        verde_principal = (76, 175, 80)  # #4CAF50
+        verde_brilhante = (0, 230, 118)  # #00E676
+        azul_ciano = (0, 188, 212)  # #00BCD4
+        azul_brilhante = (0, 229, 255)  # #00E5FF
+        
+        # Corpo principal do cacto (retângulo vertical)
+        draw.rectangle([10, 4, 22, 20], outline=verde_principal, fill=verde_principal, width=1)
+        
+        # Braço esquerdo
+        draw.rectangle([6, 10, 10, 12], outline=verde_brilhante, fill=verde_brilhante)
+        
+        # Braço direito
+        draw.rectangle([22, 14, 26, 16], outline=verde_brilhante, fill=verde_brilhante)
+        
+        # Chip central (coração do cacto)
+        draw.rectangle([13, 10, 19, 14], outline=azul_brilhante, fill=azul_ciano)
+        
+        # Pontos de conexão
+        draw.ellipse([5, 9, 7, 11], outline=azul_brilhante, fill=azul_brilhante)
+        draw.ellipse([25, 13, 27, 15], outline=azul_brilhante, fill=azul_brilhante)
+        
+        # Salvar como arquivo temporário .ico
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.ico')
+        img.save(temp_file.name, format='ICO', sizes=[(32, 32)])
+        temp_file.close()
+        
+        return temp_file.name
+    except ImportError:
+        # Se PIL não estiver disponível, retorna None
+        return None
+    except Exception:
+        return None
+
+
+def aplicar_icone_cacto(janela):
+    """Aplica o ícone de cacto na janela."""
+    try:
+        icon_path = criar_icone_cacto()
+        if icon_path and os.path.exists(icon_path):
+            janela.iconbitmap(icon_path)
+            # Não deletar o arquivo imediatamente, deixar para o sistema limpar
+    except Exception:
+        pass  # Se falhar, apenas ignora
+
 
 # Lista global da venda
 LISTA_ITENS = []
@@ -37,8 +95,11 @@ def atualizar_tabela(tree, label_total):
 def criar_interface_pdv(janela):
 
     janela.title("Mandacaru TEC – PDV")
-    janela.geometry("900x600")
-    janela.configure(bg="#f7f7f7")
+    janela.geometry("1000x700")
+    janela.configure(bg="#1a237e")
+    
+    # Aplicar ícone de cacto
+    aplicar_icone_cacto(janela)
 
     # ========= FUNÇÕES DE MENU =========
 
@@ -117,20 +178,32 @@ def criar_interface_pdv(janela):
     janela.config(menu=menu_bar)
 
     # --------- TOPO: CAMPOS DE VENDA ---------
-    topo = tk.Frame(janela, bg="#f7f7f7")
-    topo.pack(fill="x", padx=10, pady=10)
+    topo = tk.Frame(janela, bg="#283593")
+    topo.pack(fill="x", padx=15, pady=15)
 
-    tk.Label(topo, text="Código de Barras:", bg="#f7f7f7").pack(side="left")
-    entry_codigo = tk.Entry(topo, width=20)
-    entry_codigo.pack(side="left", padx=5)
+    tk.Label(
+        topo, 
+        text="Código de Barras:", 
+        bg="#283593",
+        fg="white",
+        font=("Arial", 11, "bold")
+    ).pack(side="left", padx=5)
+    entry_codigo = tk.Entry(topo, width=25, font=("Arial", 11), bg="white", fg="black")
+    entry_codigo.pack(side="left", padx=8)
 
     # foco inicial no campo de código (para uso com bip)
     entry_codigo.focus_set()
 
-    tk.Label(topo, text="Qtd:", bg="#f7f7f7").pack(side="left")
-    entry_qtd = tk.Entry(topo, width=5)
+    tk.Label(
+        topo, 
+        text="Qtd:", 
+        bg="#283593",
+        fg="white",
+        font=("Arial", 11, "bold")
+    ).pack(side="left", padx=10)
+    entry_qtd = tk.Entry(topo, width=8, font=("Arial", 11), bg="white", fg="black")
     entry_qtd.insert(0, "1")
-    entry_qtd.pack(side="left", padx=5)
+    entry_qtd.pack(side="left", padx=8)
 
     def on_adicionar():
         codigo = entry_codigo.get().strip()
@@ -187,19 +260,36 @@ def criar_interface_pdv(janela):
 
     btn_add = tk.Button(
         topo,
-        text="Adicionar",
+        text="➕ Adicionar",
         command=on_adicionar,
-        bg="#4CAF50",
-        fg="white"
+        bg="#00E676",
+        fg="white",
+        font=("Arial", 11, "bold"),
+        relief="raised",
+        bd=2,
+        padx=15,
+        pady=5,
+        cursor="hand2",
+        activebackground="#4CAF50"
     )
-    btn_add.pack(side="left", padx=8)
+    btn_add.pack(side="left", padx=12)
 
     # ENTER no campo de código adiciona o item (modo bip)
     entry_codigo.bind("<Return>", lambda event: on_adicionar())
 
     # --------- TABELA ---------
+    frame_tabela = tk.Frame(janela, bg="#283593")
+    frame_tabela.pack(fill="both", expand=True, padx=15, pady=10)
+    
     colunas = ("codigo", "descricao", "qtd", "preco_unit", "subtotal")
-    tree = ttk.Treeview(janela, columns=colunas, show="headings", height=15)
+    tree = ttk.Treeview(frame_tabela, columns=colunas, show="headings", height=18)
+
+    # Configurar estilo da tabela
+    style = ttk.Style()
+    style.theme_use("clam")
+    style.configure("Treeview", font=("Arial", 10), background="white", foreground="black", fieldbackground="white")
+    style.configure("Treeview.Heading", font=("Arial", 11, "bold"), background="#3949ab", foreground="white")
+    style.map("Treeview.Heading", background=[("active", "#5c6bc0")])
 
     tree.heading("codigo", text="Código")
     tree.heading("descricao", text="Descrição")
@@ -207,23 +297,34 @@ def criar_interface_pdv(janela):
     tree.heading("preco_unit", text="Preço Unit.")
     tree.heading("subtotal", text="Subtotal")
 
-    for col in colunas:
-        tree.column(col, width=150)
+    tree.column("codigo", width=150)
+    tree.column("descricao", width=350)
+    tree.column("qtd", width=100, anchor="center")
+    tree.column("preco_unit", width=150, anchor="e")
+    tree.column("subtotal", width=150, anchor="e")
 
-    tree.pack(fill="both", expand=True, padx=10, pady=10)
+    tree.pack(side="left", fill="both", expand=True)
+    
+    scrollbar = ttk.Scrollbar(frame_tabela, orient="vertical", command=tree.yview)
+    scrollbar.pack(side="right", fill="y")
+    tree.configure(yscrollcommand=scrollbar.set)
 
     # --------- TOTAL ---------
+    frame_total = tk.Frame(janela, bg="#3949ab", relief="raised", bd=3)
+    frame_total.pack(fill="x", padx=15, pady=10)
+    
     label_total = tk.Label(
-        janela,
+        frame_total,
         text="TOTAL: R$ 0.00",
-        font=("Arial", 16, "bold"),
-        bg="#f7f7f7"
+        font=("Arial", 22, "bold"),
+        bg="#3949ab",
+        fg="white"
     )
-    label_total.pack(pady=5)
+    label_total.pack(pady=12)
 
     # --------- BOTÕES INFERIORES ---------
-    footer = tk.Frame(janela, bg="#f7f7f7")
-    footer.pack(fill="x", pady=10, padx=10)
+    footer = tk.Frame(janela, bg="#283593")
+    footer.pack(fill="x", pady=15, padx=15)
 
     def on_remover():
         item_selecionado = tree.selection()
@@ -280,30 +381,49 @@ def criar_interface_pdv(janela):
 
     btn_rem = tk.Button(
         footer,
-        text="Remover Item",
+        text="🗑️ Remover Item",
         command=on_remover,
         bg="#f44336",
-        fg="white"
+        fg="white",
+        font=("Arial", 11, "bold"),
+        relief="raised",
+        bd=2,
+        padx=15,
+        pady=8,
+        cursor="hand2"
     )
-    btn_rem.pack(side="left")
+    btn_rem.pack(side="left", padx=5)
 
     btn_clear = tk.Button(
         footer,
-        text="Limpar",
+        text="🧹 Limpar",
         command=on_limpar,
         bg="#555555",
-        fg="white"
+        fg="white",
+        font=("Arial", 11, "bold"),
+        relief="raised",
+        bd=2,
+        padx=15,
+        pady=8,
+        cursor="hand2"
     )
     btn_clear.pack(side="left", padx=10)
 
     btn_fin = tk.Button(
         footer,
-        text="Finalizar Venda",
+        text="✅ Finalizar Venda",
         command=on_finalizar,
-        bg="#2196F3",
-        fg="white"
+        bg="#00BCD4",
+        fg="white",
+        font=("Arial", 13, "bold"),
+        relief="raised",
+        bd=3,
+        padx=25,
+        pady=10,
+        cursor="hand2",
+        activebackground="#00E5FF"
     )
-    btn_fin.pack(side="right")
+    btn_fin.pack(side="right", padx=5)
 
     # Atalho: F2 volta o foco para o campo de código (ajuda no caixa)
     def focar_codigo(event=None):
