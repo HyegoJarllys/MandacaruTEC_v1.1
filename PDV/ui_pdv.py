@@ -152,11 +152,28 @@ def criar_interface_pdv(janela):
             messagebox.showerror("Erro", "Produto não encontrado no cadastro.")
             return
 
+        # Verificar estoque disponível (se houver controle)
+        estoque = produto.get("estoque")
+        if estoque is not None:
+            # Somar o que já está no carrinho desse mesmo produto
+            qtd_no_carrinho = sum(
+                item["quantidade"] for item in LISTA_ITENS if item["codigo"] == codigo
+            )
+            if qtd + qtd_no_carrinho > estoque:
+                messagebox.showerror(
+                    "Estoque insuficiente",
+                    f"Estoque disponível: {estoque:.2f}\n"
+                    f"Quantidade no carrinho: {qtd_no_carrinho:.2f}\n"
+                    f"Tentando adicionar: {qtd:.2f}",
+                )
+                return
+
         item = {
             "codigo": codigo,
             "descricao": produto["nome"],
             "quantidade": qtd,
-            "preco_unit": produto["preco"],
+            "preco_unit": produto["preco"],   # venda
+            "custo_unit": produto["custo"],   # custo
             "subtotal": produto["preco"] * qtd,
         }
 
@@ -166,6 +183,7 @@ def criar_interface_pdv(janela):
         # limpa o campo de código e volta o foco pra ele (ideal para bip em sequência)
         entry_codigo.delete(0, tk.END)
         entry_codigo.focus_set()
+
 
     btn_add = tk.Button(
         topo,

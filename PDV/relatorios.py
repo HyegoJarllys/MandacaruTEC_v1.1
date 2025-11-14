@@ -7,16 +7,15 @@ from db import get_connection
 def abrir_relatorio_caixa_dia(parent=None):
     """Abre uma janela com o resumo de caixa do dia atual."""
 
-    # Data de hoje no formato dd/mm/AAAA
     hoje_str = datetime.now().strftime("%d/%m/%Y")
 
     conn = get_connection()
     cur = conn.cursor()
 
-    # Filtra vendas pela data (primeiros 10 caracteres do campo data_hora)
+    # Busca vendas do dia
     cur.execute(
         """
-        SELECT id, data_hora, total, forma_pagamento, valor_recebido, troco
+        SELECT id, data_hora, total, forma_pagamento, valor_recebido, troco, lucro_total
         FROM vendas
         WHERE substr(data_hora, 1, 10) = ?
         ORDER BY id DESC;
@@ -42,7 +41,11 @@ def abrir_relatorio_caixa_dia(parent=None):
     total_pix = sum(
         v["total"] for v in vendas if v["forma_pagamento"].lower() == "pix"
     )
-    ticket_medio = total_geral / qtd_vendas if qtd_vendas else 0.0
+    lucro_geral = sum(v["lucro_total"] for v in vendas)
+
+    ticket_medio_venda = total_geral / qtd_vendas if qtd_vendas else 0.0
+    ticket_medio_lucro = lucro_geral / qtd_vendas if qtd_vendas else 0.0
+    margem_media = (lucro_geral / total_geral * 100) if total_geral > 0 else 0.0
 
     # Janela do relatório
     if parent is None:
@@ -51,7 +54,7 @@ def abrir_relatorio_caixa_dia(parent=None):
         janela = tk.Toplevel(parent)
 
     janela.title(f"Relatório de Caixa - {hoje_str}")
-    janela.geometry("700x500")
+    janela.geometry("800x550")
     janela.configure(bg="#f7f7f7")
 
     titulo = tk.Label(
@@ -67,7 +70,10 @@ def abrir_relatorio_caixa_dia(parent=None):
         text=(
             f"Total Geral: R$ {total_geral:.2f}   |   "
             f"Vendas: {qtd_vendas}   |   "
-            f"Ticket Médio: R$ {ticket_medio:.2f}\n"
+            f"Ticket Médio Venda: R$ {ticket_medio_venda:.2f}\n"
+            f"Lucro Total: R$ {lucro_geral:.2f}   |   "
+            f"Ticket Médio Lucro: R$ {ticket_medio_lucro:.2f}   |   "
+            f"Margem Média: {margem_media:.1f}%\n"
             f"Dinheiro: R$ {total_dinheiro:.2f}   |   "
             f"PIX: R$ {total_pix:.2f}"
         ),
@@ -80,17 +86,19 @@ def abrir_relatorio_caixa_dia(parent=None):
     frame_tab = tk.Frame(janela, bg="#f7f7f7")
     frame_tab.pack(fill="both", expand=True, padx=10, pady=10)
 
-    colunas = ("id", "hora", "forma", "total")
+    colunas = ("id", "hora", "forma", "total", "lucro")
     tree = ttk.Treeview(frame_tab, columns=colunas, show="headings", height=15)
     tree.heading("id", text="ID")
     tree.heading("hora", text="Hora")
     tree.heading("forma", text="Forma Pagto")
     tree.heading("total", text="Total (R$)")
+    tree.heading("lucro", text="Lucro (R$)")
 
     tree.column("id", width=50, anchor="center")
     tree.column("hora", width=120, anchor="center")
     tree.column("forma", width=150, anchor="center")
     tree.column("total", width=120, anchor="e")
+    tree.column("lucro", width=120, anchor="e")
 
     tree.pack(side="left", fill="both", expand=True)
 
@@ -108,13 +116,9 @@ def abrir_relatorio_caixa_dia(parent=None):
                 hora,
                 v["forma_pagamento"],
                 f"{v['total']:.2f}",
+                f"{v['lucro_total']:.2f}",
             ),
         )
 
     btn_fechar = tk.Button(janela, text="Fechar", command=janela.destroy)
     btn_fechar.pack(pady=5)
-
-
-if __name__ == "__main__":
-    abrir_relatorio_caixa_dia()
-
