@@ -25,6 +25,7 @@ Repositório versionado com Git/GitHub
 
 Interface do Sistema
 
+![Screenshot_6](https://github.com/user-attachments/assets/a1208e3b-9996-4d15-9672-20d68b014715)
 
 
 🛠️ Tecnologias Utilizadas
