@@ -77,7 +77,7 @@ def carregar_produtos(tree):
 
 def salvar_produto(entry_codigo, entry_nome, entry_preco_venda,
                    entry_preco_custo, entry_estoque_somar,
-                   entry_estoque_min, tree):
+                   entry_estoque_min, tree, janela=None):
     codigo = entry_codigo.get().strip()
     nome = entry_nome.get().strip()
     preco_venda_str = entry_preco_venda.get().strip()
@@ -179,6 +179,16 @@ def salvar_produto(entry_codigo, entry_nome, entry_preco_venda,
     entry_estoque_min.delete(0, tk.END)
 
     carregar_produtos(tree)
+    
+    # Garantir que a janela de cadastro fique em primeiro plano e com foco
+    if janela:
+        janela.lift()
+        janela.focus_force()
+        janela.attributes('-topmost', True)
+        janela.after(100, lambda: janela.attributes('-topmost', False))
+    
+    # Colocar foco no campo de código de barras para facilitar cadastro consecutivo
+    entry_codigo.focus_set()
 
 
 def deletar_produto(tree):
@@ -306,6 +316,7 @@ def abrir_cadastro_produtos(parent=None):
             entry_estoque_somar,
             entry_estoque_min,
             tree,
+            janela,
         ),
     )
     btn_salvar.grid(row=6, column=1, pady=15, sticky="w", padx=10)
@@ -376,6 +387,9 @@ def abrir_cadastro_produtos(parent=None):
 
     # Carregar produtos ao abrir
     carregar_produtos(tree)
+    
+    # Focar no campo de código de barras ao abrir a janela
+    entry_codigo.focus_set()
 
     # Se estiver rodando sozinho, precisa de mainloop
     if parent is None:
