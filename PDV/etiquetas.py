@@ -6,6 +6,29 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.lib.pagesizes import A4
 
+# importa conexão com o banco
+from db import get_connection
+
+# ==============================
+# BUSCA PRODUTO NO BD PELO CÓDIGO
+# ==============================
+
+def buscar_produto_por_codigo(codigo_barras: str):
+    """
+    Retorna 1 produto pelo código de barras.
+    Espera uma tabela produtos com, no mínimo:
+    id, codigo_barras, nome, preco (ou preco_venda).
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM produtos WHERE codigo_barras = ?;",
+        (codigo_barras,),
+    )
+    row = cur.fetchone()
+    conn.close()
+    return row
+
 # ==============================
 # FONTES (tenta Arial do Windows, senão usa padrão)
 # ==============================
@@ -102,7 +125,6 @@ def draw_so_hoje(dados):
     img = Image.new("RGB", (w, h), COR_BRANCO)
     d = ImageDraw.Draw(img)
 
-    # faixa amarela em cima
     rounded_rectangle(d, (0, 0, w, h), 26, COR_BRANCO)
     d.rectangle((0, 0, w, int(h * 0.45)), fill=COR_AMARELO)
 
@@ -301,43 +323,101 @@ def abrir_etiquetas(parent=None):
 
     row = 0
 
+    # ---- CÓDIGO DE BARRAS + BUSCAR ----
+    tk.Label(frame_left, text="Código de Barras:", bg="#f5f5f5").grid(
+        row=row, column=0, sticky="w"
+    )
+    entry_codigo = tk.Entry(frame_left, width=16)
+    entry_codigo.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+
+    def on_buscar():
+        codigo = entry_codigo.get().strip()
+        if not codigo:
+            messagebox.showwarning("Aviso", "Digite o código de barras.")
+            return
+        try:
+            prod = buscar_produto_por_codigo(codigo)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao buscar produto:\n{e}")
+            return
+
+        if not prod:
+            messagebox.showerror("Erro", "Produto não encontrado.")
+            return
+
+        # tenta pegar 'preco' ou 'preco_venda'
+        preco = None
+        try:
+            if isinstance(prod, dict) or hasattr(prod, "keys"):
+                if "preco" in prod.keys():
+                    preco = prod["preco"]
+                elif "preco_venda" in prod.keys():
+                    preco = prod["preco_venda"]
+                if "unidade" in prod.keys():
+                    und = (prod["unidade"] or "").upper().strip()
+                    if und:
+                        entry_unidade.delete(0, tk.END)
+                        entry_unidade.insert(0, und)
+            else:
+                # fallback em caso de tupla: id, codigo, nome, preco
+                if len(prod) >= 4:
+                    preco = prod[3]
+        except Exception:
+            pass
+
+        if preco is not None:
+            try:
+                preco = float(preco)
+                entry_preco.delete(0, tk.END)
+                entry_preco.insert(0, f"{preco:.2f}")
+            except Exception:
+                pass
+
+    btn_buscar = tk.Button(frame_left, text="Buscar", command=on_buscar)
+    btn_buscar.grid(row=row, column=2, padx=5, pady=3, sticky="w")
+
+    entry_codigo.bind("<Return>", lambda e: on_buscar())
+
+    row += 1
+
+    # ---- CAMPOS DE CONFIGURAÇÃO ----
     tk.Label(frame_left, text="Modelo:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
     modelos = list(TEMPLATES.keys())
     combo_modelo = ttk.Combobox(frame_left, values=modelos, width=20, state="readonly")
     combo_modelo.set("OFERTA")
-    combo_modelo.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    combo_modelo.grid(row=row, column=1, padx=5, pady=3, sticky="w", columnspan=2)
     row += 1
 
     tk.Label(frame_left, text="Preço:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
     entry_preco = tk.Entry(frame_left, width=12)
-    entry_preco.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    entry_preco.grid(row=row, column=1, padx=5, pady=3, sticky="w", columnspan=2)
     row += 1
 
     tk.Label(frame_left, text="UND/KG:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
     entry_unidade = tk.Entry(frame_left, width=12)
     entry_unidade.insert(0, "UND.")
-    entry_unidade.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    entry_unidade.grid(row=row, column=1, padx=5, pady=3, sticky="w", columnspan=2)
     row += 1
 
     tk.Label(frame_left, text="Economia (R$):", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
     entry_economia = tk.Entry(frame_left, width=12)
-    entry_economia.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    entry_economia.grid(row=row, column=1, padx=5, pady=3, sticky="w", columnspan=2)
     row += 1
 
     tk.Label(frame_left, text="Qtd. combo (LEVE X):", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
     entry_qtd_combo = tk.Entry(frame_left, width=12)
-    entry_qtd_combo.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    entry_qtd_combo.grid(row=row, column=1, padx=5, pady=3, sticky="w", columnspan=2)
     row += 1
 
     tk.Label(frame_left, text="Preço combo:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
     entry_preco_combo = tk.Entry(frame_left, width=12)
-    entry_preco_combo.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    entry_preco_combo.grid(row=row, column=1, padx=5, pady=3, sticky="w", columnspan=2)
     row += 1
 
     tk.Label(frame_left, text="Qtd de cópias:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
     entry_qtd_copias = tk.Entry(frame_left, width=12)
     entry_qtd_copias.insert(0, "1")
-    entry_qtd_copias.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    entry_qtd_copias.grid(row=row, column=1, padx=5, pady=3, sticky="w", columnspan=2)
     row += 1
 
     imagens_geradas = []
@@ -387,7 +467,6 @@ def abrir_etiquetas(parent=None):
             "preco_combo": entry_preco_combo.get().strip(),
         }
 
-        # cálculo do combo (preço unitário)
         preco_combo_float = None
         qtd_combo_int = None
         try:
@@ -451,7 +530,7 @@ def abrir_etiquetas(parent=None):
         command=gerar_etiqueta,
         bg="#111111",
         fg="white",
-    ).grid(row=row, column=0, columnspan=2, pady=(12, 4), sticky="ew")
+    ).grid(row=row, column=0, columnspan=3, pady=(12, 4), sticky="ew")
     row += 1
 
     tk.Button(
@@ -460,7 +539,7 @@ def abrir_etiquetas(parent=None):
         command=salvar_png,
         bg="#e5e5e5",
         fg="#111111",
-    ).grid(row=row, column=0, columnspan=2, pady=2, sticky="ew")
+    ).grid(row=row, column=0, columnspan=3, pady=2, sticky="ew")
     row += 1
 
     tk.Button(
@@ -469,7 +548,7 @@ def abrir_etiquetas(parent=None):
         command=salvar_pdf,
         bg="#e5e5e5",
         fg="#111111",
-    ).grid(row=row, column=0, columnspan=2, pady=2, sticky="ew")
+    ).grid(row=row, column=0, columnspan=3, pady=2, sticky="ew")
     row += 1
 
     janela.after(200, lambda: atualizar_preview(None))
