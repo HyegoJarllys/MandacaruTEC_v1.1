@@ -37,3 +37,19 @@ Tkinter (interface gráfica)
 Git / GitHub (controle de versão)
 
 PostgreSQL para persistência de dados
+
+Ferramentas de IA que auxiliam no desempenho
+
+
+Atualização da interface gráfica e funcionalidades:
+
+![Screenshot_19](https://github.com/user-attachments/assets/85eea441-86c6-47db-a530-46546b37acd3)
+
+
+Próximos passo:
+<Testagem para encontrar eventuais bugs e erros, ou ainda falhas internas>
+<Otimização da interface, visando torná-lo um modelo com boa  UI/UX>
+<Integração com um agente de IA para que seja treinado para utilizar dados relacionais na criação de insights,
+que auxiliem na tomada de cesisão!!>
+
+
