@@ -1,277 +1,382 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+
 from db import get_connection
 
 
-def carregar_produtos(tree):
-    """Carrega os produtos do banco e joga na tabela."""
-    # Limpar tabela
-    for item in tree.get_children():
-        tree.delete(item)
+# =====================================================================
+# BANCO
+# =====================================================================
+def _get_conn():
+    return get_connection()
 
-    conn = get_connection()
+
+def _garantir_colunas_produtos():
+    """
+    Garante que a tabela produtos tenha:
+      - codigo_barras (unique)
+      - nome
+      - preco
+      - estoque
+      - custo
+      - validade
+    """
+    conn = _get_conn()
     cur = conn.cursor()
+
+    # Cria se não existir (básica)
     cur.execute(
-        "SELECT id, codigo_barras, nome, preco, preco_custo, estoque FROM produtos ORDER BY id DESC;"
+        """
+        CREATE TABLE IF NOT EXISTS produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo_barras TEXT UNIQUE,
+            nome TEXT,
+            preco REAL DEFAULT 0
+        );
+        """
     )
-    rows = cur.fetchall()
-    conn.close()
 
-    for row in rows:
-        tree.insert(
-            "",
-            "end",
-            iid=str(row["id"]),
-            values=(
-                row["codigo_barras"],
-                row["nome"],
-                f"R$ {row['preco']:.2f}",          # preço de venda
-                f"R$ {row['preco_custo']:.2f}",    # custo
-                row["estoque"] if row["estoque"] is not None else 0,
-            ),
-        )
+    # Garante colunas adicionais
+    cur.execute("PRAGMA table_info(produtos);")
+    cols = {row[1] for row in cur.fetchall()}
 
+    if "estoque" not in cols:
+        cur.execute("ALTER TABLE produtos ADD COLUMN estoque REAL DEFAULT 0;")
 
-def salvar_produto(entry_codigo, entry_nome, entry_preco_venda,
-                   entry_preco_custo, entry_estoque_somar,
-                   entry_estoque_min, tree):
-    codigo = entry_codigo.get().strip()
-    nome = entry_nome.get().strip()
-    preco_venda_str = entry_preco_venda.get().strip()
-    preco_custo_str = entry_preco_custo.get().strip()
-    estoque_str = entry_estoque_somar.get().strip()
-    estoque_min_str = entry_estoque_min.get().strip()
+    if "custo" not in cols:
+        cur.execute("ALTER TABLE produtos ADD COLUMN custo REAL DEFAULT 0;")
 
-    if not codigo or not nome or not preco_venda_str or not preco_custo_str:
-        messagebox.showwarning(
-            "Aviso",
-            "Preencha pelo menos código, nome, preço de venda e custo."
-        )
-        return
+    if "validade" not in cols:
+        cur.execute("ALTER TABLE produtos ADD COLUMN validade TEXT;")
 
-    try:
-        preco_venda = float(preco_venda_str.replace(",", "."))
-    except ValueError:
-        messagebox.showerror("Erro", "Preço de venda inválido.")
-        return
-
-    try:
-        preco_custo = float(preco_custo_str.replace(",", "."))
-    except ValueError:
-        messagebox.showerror("Erro", "Preço de custo inválido.")
-        return
-
-    try:
-        qtd_informada = float(estoque_str.replace(",", ".")) if estoque_str else 0.0
-    except ValueError:
-        messagebox.showerror("Erro", "Quantidade para somar ao estoque inválida.")
-        return
-
-    try:
-        estoque_minimo = float(estoque_min_str.replace(",", ".")) if estoque_min_str else 0.0
-    except ValueError:
-        messagebox.showerror("Erro", "Estoque mínimo inválido.")
-        return
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    # Verifica se já existe produto com esse código
-    cur.execute(
-        "SELECT id, estoque FROM produtos WHERE codigo_barras = ? ORDER BY id DESC LIMIT 1;",
-        (codigo,),
-    )
-    existente = cur.fetchone()
-
-    try:
-        if existente:
-            # Já existe produto com esse código → SOMA estoque
-            estoque_atual = existente["estoque"] if existente["estoque"] is not None else 0.0
-            estoque_novo = estoque_atual + qtd_informada
-
-            cur.execute(
-                """
-                UPDATE produtos
-                SET nome = ?, preco = ?, preco_custo = ?, estoque = ?, estoque_minimo = ?
-                WHERE id = ?;
-                """,
-                (nome, preco_venda, preco_custo, estoque_novo, estoque_minimo, existente["id"]),
-            )
-            mensagem = (
-                f"Produto atualizado.\n\n"
-                f"Estoque anterior: {estoque_atual:.2f}\n"
-                f"Quantidade adicionada: {qtd_informada:.2f}\n"
-                f"Novo estoque: {estoque_novo:.2f}"
-            )
-        else:
-            # Não existe → cadastra novo produto
-            cur.execute(
-                """
-                INSERT INTO produtos
-                    (codigo_barras, nome, preco, preco_custo, estoque, estoque_minimo)
-                VALUES (?, ?, ?, ?, ?, ?);
-                """,
-                (codigo, nome, preco_venda, preco_custo, qtd_informada, estoque_minimo),
-            )
-            mensagem = (
-                "Produto cadastrado com sucesso.\n\n"
-                f"Estoque inicial: {qtd_informada:.2f}"
-            )
-
-        conn.commit()
-    except Exception as e:
-        conn.close()
-        messagebox.showerror("Erro", f"Erro ao salvar produto:\n{e}")
-        return
-
-    conn.close()
-    messagebox.showinfo("Sucesso", mensagem)
-
-    # Limpar campos
-    entry_codigo.delete(0, tk.END)
-    entry_nome.delete(0, tk.END)
-    entry_preco_venda.delete(0, tk.END)
-    entry_preco_custo.delete(0, tk.END)
-    entry_estoque_somar.delete(0, tk.END)
-    entry_estoque_min.delete(0, tk.END)
-
-    carregar_produtos(tree)
-
-
-def deletar_produto(tree):
-    selec = tree.selection()
-    if not selec:
-        messagebox.showwarning("Aviso", "Selecione um produto na tabela.")
-        return
-
-    iid = selec[0]
-    resposta = messagebox.askyesno(
-        "Confirmação", "Tem certeza que deseja excluir este produto?"
-    )
-    if not resposta:
-        return
-
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM produtos WHERE id = ?;", (iid,))
     conn.commit()
     conn.close()
 
-    tree.delete(iid)
-    messagebox.showinfo("Sucesso", "Produto excluído.")
 
-
-def abrir_cadastro_produtos(parent=None):
-    """
-    Se parent for None: abre uma janela principal (para rodar sozinho).
-    Se parent for uma janela Tk existente (PDV): abre como janela filha (Toplevel).
-    """
-    if parent is None:
-        janela = tk.Tk()
-    else:
-        janela = tk.Toplevel(parent)
-
-    janela.title("Mandacaru TEC - Cadastro de Produtos")
-    janela.geometry("900x550")
-    janela.configure(bg="#f7f7f7")
-
-    # --------- TOPO: FORMULÁRIO ---------
-    frame_form = tk.Frame(janela, bg="#f7f7f7")
-    frame_form.pack(fill="x", padx=10, pady=10)
-
-    tk.Label(frame_form, text="Código de Barras:", bg="#f7f7f7").grid(row=0, column=0, sticky="w")
-    entry_codigo = tk.Entry(frame_form, width=30)
-    entry_codigo.grid(row=0, column=1, padx=5, pady=5)
-
-    tk.Label(frame_form, text="Nome do Produto:", bg="#f7f7f7").grid(row=1, column=0, sticky="w")
-    entry_nome = tk.Entry(frame_form, width=50)
-    entry_nome.grid(row=1, column=1, padx=5, pady=5, columnspan=2, sticky="w")
-
-    tk.Label(frame_form, text="Preço de Venda (R$):", bg="#f7f7f7").grid(row=2, column=0, sticky="w")
-    entry_preco_venda = tk.Entry(frame_form, width=15)
-    entry_preco_venda.grid(row=2, column=1, padx=5, pady=5, sticky="w")
-
-    tk.Label(frame_form, text="Preço de Custo (R$):", bg="#f7f7f7").grid(row=3, column=0, sticky="w")
-    entry_preco_custo = tk.Entry(frame_form, width=15)
-    entry_preco_custo.grid(row=3, column=1, padx=5, pady=5, sticky="w")
-
-    tk.Label(frame_form, text="Qtd para somar ao estoque:", bg="#f7f7f7").grid(row=4, column=0, sticky="w")
-    entry_estoque_somar = tk.Entry(frame_form, width=15)
-    entry_estoque_somar.grid(row=4, column=1, padx=5, pady=5, sticky="w")
-
-    tk.Label(frame_form, text="Estoque Mínimo:", bg="#f7f7f7").grid(row=5, column=0, sticky="w")
-    entry_estoque_min = tk.Entry(frame_form, width=15)
-    entry_estoque_min.grid(row=5, column=1, padx=5, pady=5, sticky="w")
-
-    # Botão salvar
-    btn_salvar = tk.Button(
-        frame_form,
-        text="Salvar / Atualizar",
-        bg="#4CAF50",
-        fg="white",
-        command=lambda: salvar_produto(
-            entry_codigo,
-            entry_nome,
-            entry_preco_venda,
-            entry_preco_custo,
-            entry_estoque_somar,
-            entry_estoque_min,
-            tree,
-        ),
+def _buscar_produto(codigo_barras):
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, codigo_barras, nome, preco, estoque, custo, validade
+        FROM produtos
+        WHERE codigo_barras = ?;
+        """,
+        (codigo_barras,),
     )
-    btn_salvar.grid(row=6, column=1, pady=10, sticky="w")
+    row = cur.fetchone()
+    conn.close()
+    return row
 
-    # --------- TABELA ---------
-    frame_tab = tk.Frame(janela, bg="#f7f7f7")
-    frame_tab.pack(fill="both", expand=True, padx=10, pady=10)
 
-    colunas = ("codigo", "nome", "preco_venda", "preco_custo", "estoque")
-    tree = ttk.Treeview(frame_tab, columns=colunas, show="headings", height=10)
-    tree.heading("codigo", text="Código de Barras")
-    tree.heading("nome", text="Nome")
-    tree.heading("preco_venda", text="Preço Venda")
-    tree.heading("preco_custo", text="Custo")
-    tree.heading("estoque", text="Estoque")
+def _listar_produtos():
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT codigo_barras, nome, preco, estoque, validade
+        FROM produtos
+        ORDER BY nome ASC;
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
-    tree.column("codigo", width=140)
-    tree.column("nome", width=280)
-    tree.column("preco_venda", width=100)
-    tree.column("preco_custo", width=100)
-    tree.column("estoque", width=80, anchor="center")
 
+def _salvar_produto(codigo, nome, preco, qtd_add, custo, validade):
+    """
+    Se o produto já existe:
+      - soma qtd_add ao estoque
+      - atualiza nome, preco, custo, validade
+    Senão:
+      - cria com estoque = qtd_add
+    """
+    conn = _get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT id, estoque FROM produtos WHERE codigo_barras = ?;",
+        (codigo,),
+    )
+    row = cur.fetchone()
+
+    if row:
+        prod_id, estoque_atual = row
+        novo_estoque = (estoque_atual or 0) + qtd_add
+
+        cur.execute(
+            """
+            UPDATE produtos
+            SET nome = ?, preco = ?, estoque = ?, custo = ?, validade = ?
+            WHERE id = ?;
+            """,
+            (nome, preco, novo_estoque, custo, validade, prod_id),
+        )
+    else:
+        cur.execute(
+            """
+            INSERT INTO produtos
+                (codigo_barras, nome, preco, estoque, custo, validade)
+            VALUES (?, ?, ?, ?, ?, ?);
+            """,
+            (codigo, nome, preco, qtd_add, custo, validade),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def _excluir_produto(codigo):
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM produtos WHERE codigo_barras = ?;", (codigo,))
+    conn.commit()
+    conn.close()
+
+
+# =====================================================================
+# INTERFACE
+# =====================================================================
+def abrir_cadastro_produtos(parent=None):
+    _garantir_colunas_produtos()
+
+    jan = tk.Toplevel(parent) if parent is not None else tk.Tk()
+    jan.title("Mandacaru TEC - Cadastro de Produtos")
+    jan.geometry("700x500")
+    jan.configure(bg="#f7f7f7")
+
+    # ----------------- CAMPOS SUPERIORES -----------------
+    frame_top = tk.Frame(jan, bg="#f7f7f7")
+    frame_top.pack(fill="x", padx=10, pady=10)
+
+    # Código de barras
+    tk.Label(frame_top, text="Código de Barras:", bg="#f7f7f7").grid(row=0, column=0, sticky="w")
+    entry_codigo = tk.Entry(frame_top, width=25)
+    entry_codigo.grid(row=0, column=1, padx=5, pady=3, sticky="w")
+
+    # Nome
+    tk.Label(frame_top, text="Nome:", bg="#f7f7f7").grid(row=1, column=0, sticky="w")
+    entry_nome = tk.Entry(frame_top, width=40)
+    entry_nome.grid(row=1, column=1, padx=5, pady=3, sticky="w")
+
+    # Preço venda
+    tk.Label(frame_top, text="Preço (R$):", bg="#f7f7f7").grid(row=2, column=0, sticky="w")
+    entry_preco = tk.Entry(frame_top, width=10)
+    entry_preco.grid(row=2, column=1, padx=5, pady=3, sticky="w")
+
+    # Custo
+    tk.Label(frame_top, text="Custo (R$):", bg="#f7f7f7").grid(row=2, column=2, sticky="w")
+    entry_custo = tk.Entry(frame_top, width=10)
+    entry_custo.grid(row=2, column=3, padx=5, pady=3, sticky="w")
+
+    # Quantidade para adicionar ao estoque
+    tk.Label(frame_top, text="Qtd p/ Estoque:", bg="#f7f7f7").grid(row=3, column=0, sticky="w")
+    entry_qtd = tk.Entry(frame_top, width=10)
+    entry_qtd.insert(0, "0")
+    entry_qtd.grid(row=3, column=1, padx=5, pady=3, sticky="w")
+
+    # Validade
+    tk.Label(frame_top, text="Validade (dd/mm/aaaa):", bg="#f7f7f7").grid(row=3, column=2, sticky="w")
+    entry_validade = tk.Entry(frame_top, width=12)
+    entry_validade.grid(row=3, column=3, padx=5, pady=3, sticky="w")
+
+    # ----------------- BOTÕES -----------------
+    frame_btn = tk.Frame(jan, bg="#f7f7f7")
+    frame_btn.pack(fill="x", padx=10, pady=5)
+
+    def limpar_campos():
+        entry_codigo.delete(0, tk.END)
+        entry_nome.delete(0, tk.END)
+        entry_preco.delete(0, tk.END)
+        entry_custo.delete(0, tk.END)
+        entry_qtd.delete(0, tk.END)
+        entry_qtd.insert(0, "0")
+        entry_validade.delete(0, tk.END)
+        entry_codigo.focus()
+
+    def carregar_produto():
+        codigo = entry_codigo.get().strip()
+        if not codigo:
+            messagebox.showwarning("Aviso", "Informe o código de barras para buscar.")
+            return
+
+        row = _buscar_produto(codigo)
+        if not row:
+            messagebox.showinfo("Info", "Produto não cadastrado ainda. Preencha os dados.")
+            entry_nome.delete(0, tk.END)
+            entry_preco.delete(0, tk.END)
+            entry_custo.delete(0, tk.END)
+            entry_qtd.delete(0, tk.END)
+            entry_qtd.insert(0, "0")
+            entry_validade.delete(0, tk.END)
+            return
+
+        _, _, nome, preco, estoque, custo, validade = row
+        entry_nome.delete(0, tk.END)
+        entry_nome.insert(0, nome or "")
+
+        entry_preco.delete(0, tk.END)
+        entry_preco.insert(0, f"{(preco or 0):.2f}")
+
+        entry_custo.delete(0, tk.END)
+        entry_custo.insert(0, f"{(custo or 0):.2f}")
+
+        entry_qtd.delete(0, tk.END)
+        entry_qtd.insert(0, "0")  # qtd a adicionar agora
+
+        entry_validade.delete(0, tk.END)
+        if validade:
+            entry_validade.insert(0, validade)
+
+    def salvar_produto():
+        codigo = entry_codigo.get().strip()
+        nome = entry_nome.get().strip()
+        preco_txt = entry_preco.get().strip().replace(",", ".")
+        custo_txt = entry_custo.get().strip().replace(",", ".")
+        qtd_txt = entry_qtd.get().strip()
+        validade = entry_validade.get().strip()
+
+        if not codigo or not nome or not preco_txt:
+            messagebox.showwarning("Aviso", "Código, Nome e Preço são obrigatórios.")
+            return
+
+        try:
+            preco = float(preco_txt)
+        except ValueError:
+            messagebox.showerror("Erro", "Preço inválido.")
+            return
+
+        try:
+            custo = float(custo_txt) if custo_txt else 0.0
+        except ValueError:
+            messagebox.showerror("Erro", "Custo inválido.")
+            return
+
+        try:
+            qtd_add = int(qtd_txt) if qtd_txt else 0
+        except ValueError:
+            messagebox.showerror("Erro", "Quantidade inválida.")
+            return
+
+        try:
+            _salvar_produto(codigo, nome, preco, qtd_add, custo, validade)
+            messagebox.showinfo("Sucesso", "Produto salvo/atualizado com sucesso.")
+            carregar_tabela()
+            limpar_campos()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar produto:\n{e}")
+
+    def excluir_produto_sel():
+        sel = tree.focus()
+        if not sel:
+            messagebox.showwarning("Aviso", "Selecione um produto na tabela.")
+            return
+        codigo = tree.item(sel, "values")[0]
+        if not messagebox.askyesno("Confirmação", f"Excluir produto {codigo}?"):
+            return
+        try:
+            _excluir_produto(codigo)
+            carregar_tabela()
+            limpar_campos()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao excluir produto:\n{e}")
+
+    tk.Button(
+        frame_btn, text="Buscar por Código", command=carregar_produto
+    ).pack(side="left", padx=5)
+
+    tk.Button(
+        frame_btn, text="Salvar / Atualizar", bg="#4CAF50", fg="white",
+        command=salvar_produto
+    ).pack(side="left", padx=5)
+
+    tk.Button(
+        frame_btn, text="Excluir Selecionado", bg="#f44336", fg="white",
+        command=excluir_produto_sel
+    ).pack(side="left", padx=5)
+
+    tk.Button(
+        frame_btn, text="Limpar Campos", command=limpar_campos
+    ).pack(side="left", padx=5)
+
+    # ----------------- TABELA -----------------
+    frame_table = tk.Frame(jan, bg="#f7f7f7")
+    frame_table.pack(fill="both", expand=True, padx=10, pady=10)
+
+    cols = ("codigo", "nome", "preco", "estoque", "validade")
+    tree = ttk.Treeview(frame_table, columns=cols, show="headings", height=10)
     tree.pack(side="left", fill="both", expand=True)
 
-    scrollbar = ttk.Scrollbar(frame_tab, orient="vertical", command=tree.yview)
-    scrollbar.pack(side="right", fill="y")
-    tree.configure(yscrollcommand=scrollbar.set)
+    tree.heading("codigo", text="Código")
+    tree.heading("nome", text="Nome")
+    tree.heading("preco", text="Preço")
+    tree.heading("estoque", text="Estoque")
+    tree.heading("validade", text="Validade")
 
-    # --------- BOTÕES INFERIORES ---------
-    frame_btn = tk.Frame(janela, bg="#f7f7f7")
-    frame_btn.pack(fill="x", padx=10, pady=10)
+    tree.column("codigo", width=100)
+    tree.column("nome", width=220)
+    tree.column("preco", width=80, anchor="e")
+    tree.column("estoque", width=70, anchor="e")
+    tree.column("validade", width=100, anchor="center")
 
-    btn_recarregar = tk.Button(
-        frame_btn,
-        text="Recarregar",
-        command=lambda: carregar_produtos(tree),
-    )
-    btn_recarregar.pack(side="left")
+    scroll = ttk.Scrollbar(frame_table, orient="vertical", command=tree.yview)
+    tree.configure(yscroll=scroll.set)
+    scroll.pack(side="right", fill="y")
 
-    btn_deletar = tk.Button(
-        frame_btn,
-        text="Excluir Produto Selecionado",
-        bg="#f44336",
-        fg="white",
-        command=lambda: deletar_produto(tree),
-    )
-    btn_deletar.pack(side="right")
+    def carregar_tabela():
+        for item in tree.get_children():
+            tree.delete(item)
+        rows = _listar_produtos()
+        for codigo, nome, preco, estoque, validade in rows:
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    codigo,
+                    nome,
+                    f"R$ {float(preco or 0):.2f}",
+                    int(estoque or 0),
+                    validade or "",
+                ),
+            )
 
-    # Carregar produtos ao abrir
-    carregar_produtos(tree)
+    def on_select(event=None):
+        sel = tree.focus()
+        if not sel:
+            return
+        codigo, nome, preco_txt, estoque_txt, validade = tree.item(sel, "values")
+        entry_codigo.delete(0, tk.END)
+        entry_codigo.insert(0, codigo)
 
-    # Se estiver rodando sozinho, precisa de mainloop
+        entry_nome.delete(0, tk.END)
+        entry_nome.insert(0, nome)
+
+        entry_preco.delete(0, tk.END)
+        entry_preco.insert(0, preco_txt.replace("R$ ", "").replace(",", "."))
+
+        entry_qtd.delete(0, tk.END)
+        entry_qtd.insert(0, "0")
+
+        entry_validade.delete(0, tk.END)
+        if validade:
+            entry_validade.insert(0, validade)
+
+        # custo não vem na tabela; se quiser, busco do banco:
+        row = _buscar_produto(codigo)
+        if row:
+            _, _, _, _, _, custo, val_db = row
+            entry_custo.delete(0, tk.END)
+            entry_custo.insert(0, f"{float(custo or 0):.2f}")
+
+            entry_validade.delete(0, tk.END)
+            if val_db:
+                entry_validade.insert(0, val_db)
+
+    tree.bind("<<TreeviewSelect>>", on_select)
+
+    carregar_tabela()
+    entry_codigo.focus()
+
     if parent is None:
-        janela.mainloop()
-
-
-if __name__ == "__main__":
-    abrir_cadastro_produtos()
+        jan.mainloop()
