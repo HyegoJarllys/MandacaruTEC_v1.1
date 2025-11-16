@@ -6,9 +6,8 @@ from tkinter import ttk, messagebox
 import pdv_functions as pf
 from cadastro_produtos import abrir_cadastro_produtos
 from relatorios import abrir_relatorio_caixa_dia
-<<<<<<< HEAD
-from etiquetas import abrir_etiquetas
-import os
+from config_empresa import abrir_config_empresa
+from cupom import gerar_cupom, gerar_qrcode_pix
 import tempfile
 
 
@@ -65,11 +64,6 @@ def aplicar_icone_cacto(janela):
             # Não deletar o arquivo imediatamente, deixar para o sistema limpar
     except Exception:
         pass  # Se falhar, apenas ignora
-
-=======
-from config_empresa import abrir_config_empresa
-from cupom import gerar_cupom, gerar_qrcode_pix
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
 
 # Lista global de itens da venda
 LISTA_ITENS = []
@@ -163,16 +157,7 @@ class PDVApp:
         self.root.geometry("1024x680")
         self.root.minsize(900, 600)
 
-<<<<<<< HEAD
-    janela.title("Mandacaru TEC – PDV")
-    janela.geometry("1000x700")
-    janela.configure(bg="#1a237e")
-    
-    # Aplicar ícone de cacto
-    aplicar_icone_cacto(janela)
-=======
         configurar_tema_escuro(self.root)
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
 
         self.entry_codigo = None
         self.entry_qtd = None
@@ -444,39 +429,6 @@ class PDVApp:
 
         self.root.config(menu=menu_bar)
 
-<<<<<<< HEAD
-    # --------- TOPO: CAMPOS DE VENDA ---------
-    topo = tk.Frame(janela, bg="#283593")
-    topo.pack(fill="x", padx=15, pady=15)
-
-    tk.Label(
-        topo, 
-        text="Código de Barras:", 
-        bg="#283593",
-        fg="white",
-        font=("Arial", 11, "bold")
-    ).pack(side="left", padx=5)
-    entry_codigo = tk.Entry(topo, width=25, font=("Arial", 11), bg="white", fg="black")
-    entry_codigo.pack(side="left", padx=8)
-
-    # foco inicial no campo de código (para uso com bip)
-    entry_codigo.focus_set()
-
-    tk.Label(
-        topo, 
-        text="Qtd:", 
-        bg="#283593",
-        fg="white",
-        font=("Arial", 11, "bold")
-    ).pack(side="left", padx=10)
-    entry_qtd = tk.Entry(topo, width=8, font=("Arial", 11), bg="white", fg="black")
-    entry_qtd.insert(0, "1")
-    entry_qtd.pack(side="left", padx=8)
-
-    def on_adicionar():
-        codigo = entry_codigo.get().strip()
-        qtd_str = entry_qtd.get().strip()
-=======
     # --------------------------------------------------------
     # BINDS
     # --------------------------------------------------------
@@ -489,7 +441,6 @@ class PDVApp:
         self.root.bind("<F4>", lambda e: self._limpar())
         self.root.bind("<F5>", lambda e: self._abrir_tela_pagamento())
         self.root.bind("<Escape>", lambda e: self.root.destroy())
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
 
     # --------------------------------------------------------
     # FUNÇÕES DO PDV
@@ -520,92 +471,9 @@ class PDVApp:
         self.entry_qtd.insert(0, "1")
         self.entry_codigo.focus()
 
-<<<<<<< HEAD
-        pf.adicionar_item(LISTA_ITENS, item)
-        atualizar_tabela(tree, label_total)
-
-        # limpa o campo de código e volta o foco pra ele (ideal para bip em sequência)
-        entry_codigo.delete(0, tk.END)
-        entry_codigo.focus_set()
-
-
-    btn_add = tk.Button(
-        topo,
-        text="➕ Adicionar",
-        command=on_adicionar,
-        bg="#00E676",
-        fg="white",
-        font=("Arial", 11, "bold"),
-        relief="raised",
-        bd=2,
-        padx=15,
-        pady=5,
-        cursor="hand2",
-        activebackground="#4CAF50"
-    )
-    btn_add.pack(side="left", padx=12)
-
-    # ENTER no campo de código adiciona o item (modo bip)
-    entry_codigo.bind("<Return>", lambda event: on_adicionar())
-
-    # --------- TABELA ---------
-    frame_tabela = tk.Frame(janela, bg="#283593")
-    frame_tabela.pack(fill="both", expand=True, padx=15, pady=10)
-    
-    colunas = ("codigo", "descricao", "qtd", "preco_unit", "subtotal")
-    tree = ttk.Treeview(frame_tabela, columns=colunas, show="headings", height=18)
-
-    # Configurar estilo da tabela
-    style = ttk.Style()
-    style.theme_use("clam")
-    style.configure("Treeview", font=("Arial", 10), background="white", foreground="black", fieldbackground="white")
-    style.configure("Treeview.Heading", font=("Arial", 11, "bold"), background="#3949ab", foreground="white")
-    style.map("Treeview.Heading", background=[("active", "#5c6bc0")])
-
-    tree.heading("codigo", text="Código")
-    tree.heading("descricao", text="Descrição")
-    tree.heading("qtd", text="Qtd")
-    tree.heading("preco_unit", text="Preço Unit.")
-    tree.heading("subtotal", text="Subtotal")
-
-    tree.column("codigo", width=150)
-    tree.column("descricao", width=350)
-    tree.column("qtd", width=100, anchor="center")
-    tree.column("preco_unit", width=150, anchor="e")
-    tree.column("subtotal", width=150, anchor="e")
-
-    tree.pack(side="left", fill="both", expand=True)
-    
-    scrollbar = ttk.Scrollbar(frame_tabela, orient="vertical", command=tree.yview)
-    scrollbar.pack(side="right", fill="y")
-    tree.configure(yscrollcommand=scrollbar.set)
-
-    # --------- TOTAL ---------
-    frame_total = tk.Frame(janela, bg="#3949ab", relief="raised", bd=3)
-    frame_total.pack(fill="x", padx=15, pady=10)
-    
-    label_total = tk.Label(
-        frame_total,
-        text="TOTAL: R$ 0.00",
-        font=("Arial", 22, "bold"),
-        bg="#3949ab",
-        fg="white"
-    )
-    label_total.pack(pady=12)
-
-    # --------- BOTÕES INFERIORES ---------
-    footer = tk.Frame(janela, bg="#283593")
-    footer.pack(fill="x", pady=15, padx=15)
-
-    def on_remover():
-        item_selecionado = tree.selection()
-        if not item_selecionado:
-            messagebox.showwarning("Aviso", "Nenhum item selecionado.")
-=======
     def _remover_item_ui(self):
         item_sel = self.tree.focus()
         if not item_sel:
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
             return
 
         index = self.tree.index(item_sel)
@@ -892,53 +760,6 @@ class PDVApp:
         except Exception as e:
             messagebox.showerror("Erro", f"Não foi possível abrir etiquetas:\n{e}")
 
-<<<<<<< HEAD
-    btn_rem = tk.Button(
-        footer,
-        text="🗑️ Remover Item",
-        command=on_remover,
-        bg="#f44336",
-        fg="white",
-        font=("Arial", 11, "bold"),
-        relief="raised",
-        bd=2,
-        padx=15,
-        pady=8,
-        cursor="hand2"
-    )
-    btn_rem.pack(side="left", padx=5)
-
-    btn_clear = tk.Button(
-        footer,
-        text="🧹 Limpar",
-        command=on_limpar,
-        bg="#555555",
-        fg="white",
-        font=("Arial", 11, "bold"),
-        relief="raised",
-        bd=2,
-        padx=15,
-        pady=8,
-        cursor="hand2"
-    )
-    btn_clear.pack(side="left", padx=10)
-
-    btn_fin = tk.Button(
-        footer,
-        text="✅ Finalizar Venda",
-        command=on_finalizar,
-        bg="#00BCD4",
-        fg="white",
-        font=("Arial", 13, "bold"),
-        relief="raised",
-        bd=3,
-        padx=25,
-        pady=10,
-        cursor="hand2",
-        activebackground="#00E5FF"
-    )
-    btn_fin.pack(side="right", padx=5)
-=======
 
 # ============================================================
 # EXECUTAR
@@ -948,7 +769,6 @@ def abrir_pdv():
     PDVApp(root)
     root.mainloop()
 
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
 
 if __name__ == "__main__":
     abrir_pdv()

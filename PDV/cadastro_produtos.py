@@ -86,147 +86,16 @@ def _garantir_colunas_produtos():
     if "estoque" not in cols:
         cur.execute("ALTER TABLE produtos ADD COLUMN estoque REAL DEFAULT 0;")
 
-<<<<<<< HEAD
-def salvar_produto(entry_codigo, entry_nome, entry_preco_venda,
-                   entry_preco_custo, entry_estoque_somar,
-                   entry_estoque_min, tree, janela=None):
-    codigo = entry_codigo.get().strip()
-    nome = entry_nome.get().strip()
-    preco_venda_str = entry_preco_venda.get().strip()
-    preco_custo_str = entry_preco_custo.get().strip()
-    estoque_str = entry_estoque_somar.get().strip()
-    estoque_min_str = entry_estoque_min.get().strip()
-=======
     if "custo" not in cols:
         cur.execute("ALTER TABLE produtos ADD COLUMN custo REAL DEFAULT 0;")
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
 
     if "validade" not in cols:
         cur.execute("ALTER TABLE produtos ADD COLUMN validade TEXT;")
 
-<<<<<<< HEAD
-    try:
-        preco_venda = float(preco_venda_str.replace(",", "."))
-    except ValueError:
-        messagebox.showerror("Erro", "Preço de venda inválido.")
-        return
-
-    try:
-        preco_custo = float(preco_custo_str.replace(",", "."))
-    except ValueError:
-        messagebox.showerror("Erro", "Preço de custo inválido.")
-        return
-
-    try:
-        qtd_informada = float(estoque_str.replace(",", ".")) if estoque_str else 0.0
-    except ValueError:
-        messagebox.showerror("Erro", "Quantidade para somar ao estoque inválida.")
-        return
-
-    try:
-        estoque_minimo = float(estoque_min_str.replace(",", ".")) if estoque_min_str else 0.0
-    except ValueError:
-        messagebox.showerror("Erro", "Estoque mínimo inválido.")
-        return
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    # Verifica se já existe produto com esse código
-    cur.execute(
-        "SELECT id, estoque FROM produtos WHERE codigo_barras = ? ORDER BY id DESC LIMIT 1;",
-        (codigo,),
-    )
-    existente = cur.fetchone()
-
-    try:
-        if existente:
-            # Já existe produto com esse código → SOMA estoque
-            estoque_atual = existente["estoque"] if existente["estoque"] is not None else 0.0
-            estoque_novo = estoque_atual + qtd_informada
-
-            cur.execute(
-                """
-                UPDATE produtos
-                SET nome = ?, preco = ?, preco_custo = ?, estoque = ?, estoque_minimo = ?
-                WHERE id = ?;
-                """,
-                (nome, preco_venda, preco_custo, estoque_novo, estoque_minimo, existente["id"]),
-            )
-            mensagem = (
-                f"Produto atualizado.\n\n"
-                f"Estoque anterior: {estoque_atual:.2f}\n"
-                f"Quantidade adicionada: {qtd_informada:.2f}\n"
-                f"Novo estoque: {estoque_novo:.2f}"
-            )
-        else:
-            # Não existe → cadastra novo produto
-            cur.execute(
-                """
-                INSERT INTO produtos
-                    (codigo_barras, nome, preco, preco_custo, estoque, estoque_minimo)
-                VALUES (?, ?, ?, ?, ?, ?);
-                """,
-                (codigo, nome, preco_venda, preco_custo, qtd_informada, estoque_minimo),
-            )
-            mensagem = (
-                "Produto cadastrado com sucesso.\n\n"
-                f"Estoque inicial: {qtd_informada:.2f}"
-            )
-
-        conn.commit()
-    except Exception as e:
-        conn.close()
-        messagebox.showerror("Erro", f"Erro ao salvar produto:\n{e}")
-        return
-
-    conn.close()
-    messagebox.showinfo("Sucesso", mensagem)
-
-    # Limpar campos
-    entry_codigo.delete(0, tk.END)
-    entry_nome.delete(0, tk.END)
-    entry_preco_venda.delete(0, tk.END)
-    entry_preco_custo.delete(0, tk.END)
-    entry_estoque_somar.delete(0, tk.END)
-    entry_estoque_min.delete(0, tk.END)
-
-    carregar_produtos(tree)
-    
-    # Garantir que a janela de cadastro fique em primeiro plano e com foco
-    if janela:
-        janela.lift()
-        janela.focus_force()
-        janela.attributes('-topmost', True)
-        janela.after(100, lambda: janela.attributes('-topmost', False))
-    
-    # Colocar foco no campo de código de barras para facilitar cadastro consecutivo
-    entry_codigo.focus_set()
-
-
-def deletar_produto(tree):
-    selec = tree.selection()
-    if not selec:
-        messagebox.showwarning("Aviso", "Selecione um produto na tabela.")
-        return
-
-    iid = selec[0]
-    resposta = messagebox.askyesno(
-        "Confirmação", "Tem certeza que deseja excluir este produto?"
-    )
-    if not resposta:
-        return
-
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM produtos WHERE id = ?;", (iid,))
-=======
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
     conn.commit()
     conn.close()
 
 
-<<<<<<< HEAD
 
 def abrir_cadastro_produtos(parent=None):
     """
@@ -360,7 +229,6 @@ def abrir_cadastro_produtos(parent=None):
     tree.column("preco_venda", width=130, anchor="e")
     tree.column("preco_custo", width=130, anchor="e")
     tree.column("estoque", width=100, anchor="center")
-=======
 def _buscar_produto(codigo_barras):
     conn = _get_conn()
     cur = conn.cursor()
@@ -391,7 +259,6 @@ def _listar_produtos():
     conn.close()
     return rows
 
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
 
 def _salvar_produto(codigo, nome, preco, qtd_add, custo, validade):
     """
@@ -623,45 +490,6 @@ def abrir_cadastro_produtos(parent=None):
     tree.heading("estoque", text="Estoque")
     tree.heading("validade", text="Validade")
 
-<<<<<<< HEAD
-    # --------- BOTÕES INFERIORES ---------
-    frame_btn = tk.Frame(janela, bg="#283593")
-    frame_btn.pack(fill="x", padx=15, pady=15)
-
-    btn_recarregar = tk.Button(
-        frame_btn,
-        text="🔄 Recarregar",
-        command=lambda: carregar_produtos(tree),
-        font=("Arial", 11, "bold"),
-        relief="raised",
-        bd=2,
-        padx=15,
-        pady=8,
-        cursor="hand2"
-    )
-    btn_recarregar.pack(side="left", padx=5)
-
-    btn_deletar = tk.Button(
-        frame_btn,
-        text="🗑️ Excluir Produto Selecionado",
-        bg="#f44336",
-        fg="white",
-        font=("Arial", 11, "bold"),
-        relief="raised",
-        bd=2,
-        padx=15,
-        pady=8,
-        cursor="hand2",
-        command=lambda: deletar_produto(tree),
-    )
-    btn_deletar.pack(side="right", padx=5)
-
-    # Carregar produtos ao abrir
-    carregar_produtos(tree)
-    
-    # Focar no campo de código de barras ao abrir a janela
-    entry_codigo.focus_set()
-=======
     tree.column("codigo", width=100)
     tree.column("nome", width=220)
     tree.column("preco", width=80, anchor="e")
@@ -725,7 +553,6 @@ def abrir_cadastro_produtos(parent=None):
 
     carregar_tabela()
     entry_codigo.focus()
->>>>>>> 2a8eb57eeecf608a6a2004611831a41f917b38e4
 
     if parent is None:
         jan.mainloop()
