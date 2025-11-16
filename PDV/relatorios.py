@@ -3,6 +3,50 @@ from tkinter import ttk, messagebox
 from datetime import date
 
 from db import get_connection
+import os
+import tempfile
+
+
+def criar_icone_cacto():
+    """Cria um ícone de cacto e retorna o caminho do arquivo temporário."""
+    try:
+        from PIL import Image, ImageDraw
+        
+        img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        verde_principal = (76, 175, 80)
+        verde_brilhante = (0, 230, 118)
+        azul_ciano = (0, 188, 212)
+        azul_brilhante = (0, 229, 255)
+        
+        draw.rectangle([10, 4, 22, 20], outline=verde_principal, fill=verde_principal, width=1)
+        draw.rectangle([6, 10, 10, 12], outline=verde_brilhante, fill=verde_brilhante)
+        draw.rectangle([22, 14, 26, 16], outline=verde_brilhante, fill=verde_brilhante)
+        draw.rectangle([13, 10, 19, 14], outline=azul_brilhante, fill=azul_ciano)
+        draw.ellipse([5, 9, 7, 11], outline=azul_brilhante, fill=azul_brilhante)
+        draw.ellipse([25, 13, 27, 15], outline=azul_brilhante, fill=azul_brilhante)
+        
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.ico')
+        img.save(temp_file.name, format='ICO', sizes=[(32, 32)])
+        temp_file.close()
+        
+        return temp_file.name
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
+def aplicar_icone_cacto(janela):
+    """Aplica o ícone de cacto na janela."""
+    try:
+        icon_path = criar_icone_cacto()
+        if icon_path and os.path.exists(icon_path):
+            janela.iconbitmap(icon_path)
+    except Exception:
+        pass
+
 
 
 # ============================================================

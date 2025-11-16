@@ -8,6 +8,62 @@ from cadastro_produtos import abrir_cadastro_produtos
 from relatorios import abrir_relatorio_caixa_dia
 from config_empresa import abrir_config_empresa
 from cupom import gerar_cupom, gerar_qrcode_pix
+import tempfile
+
+
+def criar_icone_cacto():
+    """Cria um ícone de cacto e retorna o caminho do arquivo temporário."""
+    try:
+        from PIL import Image, ImageDraw
+        
+        # Criar imagem 32x32 para o ícone
+        img = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        
+        # Cores da marca
+        verde_principal = (76, 175, 80)  # #4CAF50
+        verde_brilhante = (0, 230, 118)  # #00E676
+        azul_ciano = (0, 188, 212)  # #00BCD4
+        azul_brilhante = (0, 229, 255)  # #00E5FF
+        
+        # Corpo principal do cacto (retângulo vertical)
+        draw.rectangle([10, 4, 22, 20], outline=verde_principal, fill=verde_principal, width=1)
+        
+        # Braço esquerdo
+        draw.rectangle([6, 10, 10, 12], outline=verde_brilhante, fill=verde_brilhante)
+        
+        # Braço direito
+        draw.rectangle([22, 14, 26, 16], outline=verde_brilhante, fill=verde_brilhante)
+        
+        # Chip central (coração do cacto)
+        draw.rectangle([13, 10, 19, 14], outline=azul_brilhante, fill=azul_ciano)
+        
+        # Pontos de conexão
+        draw.ellipse([5, 9, 7, 11], outline=azul_brilhante, fill=azul_brilhante)
+        draw.ellipse([25, 13, 27, 15], outline=azul_brilhante, fill=azul_brilhante)
+        
+        # Salvar como arquivo temporário .ico
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.ico')
+        img.save(temp_file.name, format='ICO', sizes=[(32, 32)])
+        temp_file.close()
+        
+        return temp_file.name
+    except ImportError:
+        # Se PIL não estiver disponível, retorna None
+        return None
+    except Exception:
+        return None
+
+
+def aplicar_icone_cacto(janela):
+    """Aplica o ícone de cacto na janela."""
+    try:
+        icon_path = criar_icone_cacto()
+        if icon_path and os.path.exists(icon_path):
+            janela.iconbitmap(icon_path)
+            # Não deletar o arquivo imediatamente, deixar para o sistema limpar
+    except Exception:
+        pass  # Se falhar, apenas ignora
 
 
 # ============================================================
