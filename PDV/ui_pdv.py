@@ -9,67 +9,119 @@ from relatorios import abrir_relatorio_caixa_dia
 from config_empresa import abrir_config_empresa
 from cupom import gerar_cupom, gerar_qrcode_pix
 
-# Lista global de itens da venda
-LISTA_ITENS = []
-
 
 # ============================================================
-# ESTILO DARK PREMIUM
+# TEMA MANDACARU TEC – WHITE & BLACK
 # ============================================================
-def configurar_tema_escuro(root: tk.Tk):
-    """
-    Configura um tema escuro estilo 'Black Premium'
-    para Treeview, botões e labels.
-    """
-    root.configure(bg="#121212")
 
-    style = ttk.Style(root)
-    # Usa um tema que permita customização
-    try:
-        style.theme_use("clam")
-    except Exception:
-        pass
+THEME = {
+    "colors": {
+        "bg_page": "#F5F5F7",
+        "bg_surface": "#FFFFFF",
+        "bg_surface_alt": "#F8F8FA",
+        "bg_surface_muted": "#F2F2F4",
+        "text_primary": "#111111",
+        "text_secondary": "#4A4A4A",
+        "text_muted": "#8C8C8C",
+        "text_inverse": "#FFFFFF",
+        "border_subtle": "#E5E5E8",
+        "border_strong": "#D1D1D6",
+        "border_focus": "#111111",
+        "accent_primary": "#111111",
+        "accent_secondary": "#F2F2F4",
+        "accent_secondary_hover": "#E4E4E7",
+        "feedback_success": "#16A34A",
+        "feedback_error": "#DC2626",
+    },
+    "font": {
+        "family": "Segoe UI",
+        "size_xs": 11,
+        "size_sm": 13,
+        "size_md": 15,
+        "size_lg": 17,
+        "size_xl": 20,
+        "size_xxl": 26,
+    },
+}
 
-    # Treeview dark
-    style.configure(
-        "Treeview",
-        background="#1E1E1E",
-        foreground="#FFFFFF",
-        fieldbackground="#1E1E1E",
-        rowheight=26,
-        borderwidth=0,
-    )
-    style.map(
-        "Treeview",
-        background=[("selected", "#2D89EF")],
-        foreground=[("selected", "#FFFFFF")],
-    )
 
-    style.configure(
-        "Treeview.Heading",
-        background="#222222",
-        foreground="#FFFFFF",
-        relief="flat",
-        font=("Segoe UI", 9, "bold"),
-    )
-
-    # Botões "flat" escuros
-    style.configure(
-        "TButton",
-        font=("Segoe UI", 9),
-        padding=6,
-    )
+LISTA_ITENS = []  # carrinho global
 
 
 def format_money(valor: float) -> str:
     return f"R$ {valor:.2f}".replace(".", ",")
 
 
+def configurar_tema_claro(root: tk.Tk):
+    """Aplica estilos tipo 'Apple clean' usando ttk.Style."""
+    c = THEME["colors"]
+    f = THEME["font"]
+
+    root.configure(bg=c["bg_page"])
+
+    style = ttk.Style(root)
+    try:
+        style.theme_use("clam")
+    except Exception:
+        pass
+
+    # Treeview (tabela)
+    style.configure(
+        "Treeview",
+        background=c["bg_surface"],
+        foreground=c["text_primary"],
+        fieldbackground=c["bg_surface"],
+        rowheight=26,
+        borderwidth=0,
+        font=(f["family"], f["size_md"]),
+    )
+    style.map(
+        "Treeview",
+        background=[("selected", "#E4E4E7")],
+        foreground=[("selected", c["text_primary"])],
+    )
+
+    style.configure(
+        "Treeview.Heading",
+        background=c["bg_surface_alt"],
+        foreground=c["text_secondary"],
+        relief="flat",
+        font=(f["family"], f["size_sm"], "bold"),
+    )
+
+    # Scrollbar discreta
+    style.configure(
+        "Vertical.TScrollbar",
+        background=c["bg_surface_alt"],
+        troughcolor=c["bg_surface"],
+        bordercolor=c["border_subtle"],
+    )
+
+    style.configure(
+        "TButton",
+        font=(f["family"], f["size_md"]),
+        padding=6,
+    )
+
+
 # ============================================================
-# ATUALIZAR TABELA / TOTAL
+# WRAPPER DE SEGURANÇA PARA BOTÕES
+# ============================================================
+
+def safe_command(fn):
+    """Envolve um command de botão para mostrar erro em popup se algo quebrar."""
+    def _wrapped(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Ocorreu um erro:\n{e}")
+    return _wrapped
+
+
+# ============================================================
+# FUNÇÃO AUXILIAR: ATUALIZAR TABELA
 # ============================================================
 def atualizar_tabela(tree, label_total):
-    """Atualiza tabela e total do carrinho."""
     for item in tree.get_children():
         tree.delete(item)
 
@@ -88,7 +140,7 @@ def atualizar_tabela(tree, label_total):
         )
 
     total = pf.calcular_total(LISTA_ITENS)
-    label_total.config(text=f"TOTAL: {format_money(total)}")
+    label_total.config(text=format_money(total))
 
 
 # ============================================================
@@ -98,140 +150,156 @@ class PDVApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Mandacaru TEC – PDV")
-        self.root.geometry("1024x680")
-        self.root.minsize(900, 600)
+        self.root.geometry("1120x700")
+        self.root.minsize(950, 620)
 
-        configurar_tema_escuro(self.root)
+        configurar_tema_claro(self.root)
 
         self.entry_codigo = None
         self.entry_qtd = None
         self.tree = None
-        self.label_total = None
+        self.label_total_valor = None
 
         self._criar_layout()
         self._criar_menu()
         self._configurar_binds()
 
-        atualizar_tabela(self.tree, self.label_total)
+        atualizar_tabela(self.tree, self.label_total_valor)
 
     # --------------------------------------------------------
-    # LAYOUT PRINCIPAL
+    # LAYOUT
     # --------------------------------------------------------
     def _criar_layout(self):
-        # CABEÇALHO SUPERIOR
-        frame_header = tk.Frame(self.root, bg="#181818", height=60)
-        frame_header.pack(fill="x", side="top")
+        c = THEME["colors"]
+        f = THEME["font"]
 
-        lbl_logo = tk.Label(
-            frame_header,
-            text="Mandacaru TEC",
-            bg="#181818",
-            fg="#00E5FF",
-            font=("Segoe UI Semibold", 16, "bold"),
-        )
-        lbl_logo.pack(side="left", padx=15, pady=10)
+        shell = tk.Frame(self.root, bg=c["bg_page"])
+        shell.pack(fill="both", expand=True, padx=24, pady=16)
 
-        lbl_sub = tk.Label(
-            frame_header,
-            text="PDV Black Premium",
-            bg="#181818",
-            fg="#BBBBBB",
-            font=("Segoe UI", 10),
-        )
-        lbl_sub.pack(side="left", pady=10)
-
-        self.label_total = tk.Label(
-            frame_header,
-            text="TOTAL: R$ 0,00",
-            bg="#181818",
-            fg="#4CAF50",
-            font=("Segoe UI", 18, "bold"),
-        )
-        self.label_total.pack(side="right", padx=20)
-
-        # CONTEÚDO PRINCIPAL (ESQUERDA: PDV / DIREITA: ATALHOS)
-        frame_main = tk.Frame(self.root, bg="#121212")
-        frame_main.pack(fill="both", expand=True)
-
-        frame_left = tk.Frame(frame_main, bg="#121212")
-        frame_left.pack(side="left", fill="both", expand=True, padx=(10, 5), pady=10)
-
-        frame_right = tk.Frame(frame_main, bg="#181818", width=200)
-        frame_right.pack(side="right", fill="y", padx=(5, 10), pady=10)
-
-        # ----------- TOPO ESQUERDO: CAMPOS DE ENTRADA --------------
-        frame_top = tk.Frame(frame_left, bg="#121212")
-        frame_top.pack(fill="x", pady=(0, 10))
+        # HEADER
+        frame_header = tk.Frame(shell, bg=c["bg_page"])
+        frame_header.pack(fill="x", pady=(0, 12))
 
         tk.Label(
-            frame_top,
-            text="CÓDIGO",
-            bg="#121212",
-            fg="#FFFFFF",
-            font=("Segoe UI", 9, "bold"),
-        ).pack(side="left", padx=(0, 5))
-        self.entry_codigo = tk.Entry(
-            frame_top,
-            width=26,
-            font=("Consolas", 11),
-            bg="#1E1E1E",
-            fg="#FFFFFF",
-            insertbackground="#FFFFFF",
-            relief="flat",
+            frame_header,
+            text="Mandacaru TEC – PDV",
+            bg=c["bg_page"],
+            fg=c["text_primary"],
+            font=(f["family"], f["size_lg"], "bold"),
+        ).pack(side="left")
+
+        tk.Label(
+            frame_header,
+            text="Caixa rápido • Estoque integrado • Relatórios inteligentes",
+            bg=c["bg_page"],
+            fg=c["text_muted"],
+            font=(f["family"], f["size_sm"]),
+        ).pack(side="left", padx=(10, 0), pady=(6, 0))
+
+        # GRID
+        frame_grid = tk.Frame(shell, bg=c["bg_page"])
+        frame_grid.pack(fill="both", expand=True)
+
+        frame_left = tk.Frame(frame_grid, bg=c["bg_page"])
+        frame_left.pack(side="left", fill="both", expand=True, padx=(0, 12))
+
+        frame_right = tk.Frame(frame_grid, bg=c["bg_page"], width=360)
+        frame_right.pack(side="right", fill="y", padx=(12, 0))
+
+        # ====== CARD ESQUERDO ======
+        card_left = tk.Frame(
+            frame_left,
+            bg=c["bg_surface"],
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=c["border_subtle"],
         )
-        self.entry_codigo.pack(side="left")
+        card_left.pack(fill="both", expand=True, pady=(0, 8))
+
+        # Inputs topo
+        frame_inputs = tk.Frame(card_left, bg=c["bg_surface"])
+        frame_inputs.pack(fill="x", padx=16, pady=16)
+
+        tk.Label(
+            frame_inputs,
+            text="Código de barras",
+            bg=c["bg_surface"],
+            fg=c["text_secondary"],
+            font=(f["family"], f["size_xs"]),
+        ).grid(row=0, column=0, sticky="w")
+
+        self.entry_codigo = tk.Entry(
+            frame_inputs,
+            width=26,
+            font=(f["family"], f["size_md"]),
+            bg=c["bg_surface"],
+            fg=c["text_primary"],
+            insertbackground=c["text_primary"],
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=c["border_subtle"],
+            highlightcolor=c["border_focus"],
+        )
+        self.entry_codigo.grid(row=1, column=0, sticky="we", pady=(2, 0))
         self.entry_codigo.focus()
 
         tk.Label(
-            frame_top,
-            text="QTD",
-            bg="#121212",
-            fg="#FFFFFF",
-            font=("Segoe UI", 9, "bold"),
-        ).pack(side="left", padx=(15, 5))
+            frame_inputs,
+            text="Qtd",
+            bg=c["bg_surface"],
+            fg=c["text_secondary"],
+            font=(f["family"], f["size_xs"]),
+        ).grid(row=0, column=1, sticky="w", padx=(12, 0))
+
         self.entry_qtd = tk.Entry(
-            frame_top,
-            width=5,
-            font=("Consolas", 11),
-            bg="#1E1E1E",
-            fg="#FFFFFF",
-            insertbackground="#FFFFFF",
+            frame_inputs,
+            width=6,
+            font=(f["family"], f["size_md"]),
+            bg=c["bg_surface"],
+            fg=c["text_primary"],
+            insertbackground=c["text_primary"],
             relief="flat",
+            highlightthickness=1,
+            highlightbackground=c["border_subtle"],
+            highlightcolor=c["border_focus"],
         )
         self.entry_qtd.insert(0, "1")
-        self.entry_qtd.pack(side="left")
+        self.entry_qtd.grid(row=1, column=1, sticky="w", padx=(12, 0), pady=(2, 0))
 
         btn_add = tk.Button(
-            frame_top,
-            text="ADICIONAR (F2)",
-            bg="#00C853",
-            fg="#FFFFFF",
-            font=("Segoe UI", 9, "bold"),
+            frame_inputs,
+            text="Adicionar (F2)",
+            bg=c["accent_primary"],
+            fg=c["text_inverse"],
+            activebackground="#000000",
+            activeforeground=c["text_inverse"],
+            bd=0,
             relief="flat",
-            padx=15,
-            pady=4,
-            command=self._adicionar_item_ui,
+            font=(f["family"], f["size_md"], "bold"),
+            padx=24,
+            pady=8,
+            command=safe_command(self._adicionar_item_ui),
         )
-        btn_add.pack(side="left", padx=(20, 0))
+        btn_add.grid(row=1, column=2, padx=(16, 0))
 
-        # ----------- TABELA (TREEVIEW) --------------
-        frame_table = tk.Frame(frame_left, bg="#121212")
-        frame_table.pack(fill="both", expand=True)
+        frame_inputs.grid_columnconfigure(0, weight=1)
 
-        colunas = ("codigo", "descricao", "qtd", "unit", "sub")
-        self.tree = ttk.Treeview(
-            frame_table, columns=colunas, show="headings", height=18
-        )
+        # Tabela
+        frame_table = tk.Frame(card_left, bg=c["bg_surface"])
+        frame_table.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+
+        cols = ("codigo", "descricao", "qtd", "unit", "sub")
+        self.tree = ttk.Treeview(frame_table, columns=cols, show="headings", height=14)
         self.tree.pack(side="left", fill="both", expand=True)
 
-        self.tree.heading("codigo", text="CÓDIGO")
-        self.tree.heading("descricao", text="DESCRIÇÃO")
-        self.tree.heading("qtd", text="QTD")
-        self.tree.heading("unit", text="UNITÁRIO")
-        self.tree.heading("sub", text="SUBTOTAL")
+        self.tree.heading("codigo", text="Código")
+        self.tree.heading("descricao", text="Descrição")
+        self.tree.heading("qtd", text="Qtd")
+        self.tree.heading("unit", text="Preço Unit.")
+        self.tree.heading("sub", text="Subtotal")
 
-        self.tree.column("codigo", width=120, anchor="w")
-        self.tree.column("descricao", width=420, anchor="w")
+        self.tree.column("codigo", width=110, anchor="w")
+        self.tree.column("descricao", width=350, anchor="w")
         self.tree.column("qtd", width=60, anchor="e")
         self.tree.column("unit", width=90, anchor="e")
         self.tree.column("sub", width=110, anchor="e")
@@ -242,104 +310,152 @@ class PDVApp:
         self.tree.configure(yscroll=scroll.set)
         scroll.pack(side="right", fill="y")
 
-        # ----------- BARRA INFERIOR DE BOTÕES --------------
-        frame_bottom = tk.Frame(frame_left, bg="#121212")
-        frame_bottom.pack(fill="x", pady=(10, 0))
+        # ====== FOOTER BOTÕES ======
+        footer = tk.Frame(shell, bg=c["bg_page"])
+        footer.pack(fill="x", pady=(8, 0))
 
-        def make_btn(text, bg, command, side="left"):
+        frame_footer_left = tk.Frame(footer, bg=c["bg_page"])
+        frame_footer_left.pack(side="left")
+
+        frame_footer_right = tk.Frame(footer, bg=c["bg_page"])
+        frame_footer_right.pack(side="right")
+
+        def ghost_button(parent, text, command):
             return tk.Button(
-                frame_bottom,
+                parent,
                 text=text,
-                bg=bg,
-                fg="#FFFFFF",
-                font=("Segoe UI", 9, "bold"),
+                command=safe_command(command),
+                bg=c["bg_page"],
+                fg=c["text_primary"],
+                activebackground=c["accent_secondary_hover"],
+                activeforeground=c["text_primary"],
+                bd=0,
                 relief="flat",
-                padx=18,
+                font=(THEME["font"]["family"], THEME["font"]["size_sm"]),
+                padx=14,
                 pady=6,
-                command=command,
-            ).pack(side=side, padx=5)
-
-        make_btn("REMOVER ITEM (Del)", "#E53935", self._remover_item_ui)
-        make_btn("LIMPAR CARRINHO (F4)", "#424242", self._limpar)
-        make_btn("FINALIZAR VENDA (F5)", "#1976D2", self._abrir_tela_pagamento, "right")
-        make_btn("FECHAR (ESC)", "#757575", self.root.destroy, "right")
-
-        # ----------- PAINEL DIREITO: ATALHOS / STATUS --------------
-        tk.Label(
-            frame_right,
-            text="ATALHOS",
-            bg="#181818",
-            fg="#FFFFFF",
-            font=("Segoe UI", 10, "bold"),
-        ).pack(anchor="w", padx=10, pady=(5, 0))
-
-        atalhos = [
-            ("F2", "Adicionar item"),
-            ("Del", "Remover item"),
-            ("F4", "Limpar carrinho"),
-            ("F5", "Finalizar venda"),
-            ("ESC", "Fechar PDV"),
-        ]
-
-        for tecla, desc in atalhos:
-            linha = tk.Frame(frame_right, bg="#181818")
-            linha.pack(anchor="w", padx=10, pady=3, fill="x")
-
-            lbl_key = tk.Label(
-                linha,
-                text=tecla,
-                bg="#2D2D2D",
-                fg="#FFFFFF",
-                font=("Segoe UI", 8, "bold"),
-                padx=6,
-                pady=2,
             )
-            lbl_key.pack(side="left")
 
-            lbl_desc = tk.Label(
-                linha,
-                text=desc,
-                bg="#181818",
-                fg="#BBBBBB",
-                font=("Segoe UI", 9),
-            )
-            lbl_desc.pack(side="left", padx=6)
-
-        # Espaço
-        tk.Label(frame_right, bg="#181818").pack(fill="x", pady=10)
-
-        # Ações rápidas
-        tk.Label(
-            frame_right,
-            text="AÇÕES RÁPIDAS",
-            bg="#181818",
-            fg="#FFFFFF",
-            font=("Segoe UI", 10, "bold"),
-        ).pack(anchor="w", padx=10)
-
-        def make_side_btn(text, cmd):
-            tk.Button(
-                frame_right,
+        def secondary_button(parent, text, command):
+            return tk.Button(
+                parent,
                 text=text,
-                bg="#263238",
-                fg="#FFFFFF",
-                font=("Segoe UI", 9),
+                command=safe_command(command),
+                bg=c["accent_secondary"],
+                fg=c["text_primary"],
+                activebackground=c["accent_secondary_hover"],
+                activeforeground=c["text_primary"],
+                bd=0,
                 relief="flat",
-                anchor="w",
-                padx=10,
-                pady=4,
-                command=cmd,
-            ).pack(fill="x", padx=10, pady=3)
+                font=(THEME["font"]["family"], THEME["font"]["size_sm"], "bold"),
+                padx=18,
+                pady=8,
+            )
 
-        make_side_btn("Cadastro de Produtos", lambda: abrir_cadastro_produtos(self.root))
-        make_side_btn("Modo Etiquetas", self._abrir_modo_etiquetas)
-        make_side_btn(
-            "Relatório Caixa (Dia)",
-            lambda: abrir_relatorio_caixa_dia(self.root),
+        def primary_button(parent, text, command):
+            return tk.Button(
+                parent,
+                text=text,
+                command=safe_command(command),
+                bg=c["accent_primary"],
+                fg=c["text_inverse"],
+                activebackground="#000000",
+                activeforeground=c["text_inverse"],
+                bd=0,
+                relief="flat",
+                font=(THEME["font"]["family"], THEME["font"]["size_sm"], "bold"),
+                padx=22,
+                pady=9,
+            )
+
+        ghost_button(
+            frame_footer_left, "REMOVER ITEM (DEL)", self._remover_item_ui
+        ).pack(side="left", padx=(0, 8))
+        ghost_button(
+            frame_footer_left, "LIMPAR CARRINHO (F4)", self._limpar
+        ).pack(side="left")
+
+        secondary_button(
+            frame_footer_right, "FECHAR (ESC)", self.root.destroy
+        ).pack(side="right", padx=(8, 0))
+        primary_button(
+            frame_footer_right, "FINALIZAR VENDA (F5)", self._abrir_tela_pagamento
+        ).pack(side="right")
+
+        # ====== COLUNA DIREITA – TOTAL + AÇÕES ======
+        card_right = tk.Frame(
+            frame_right,
+            bg=c["bg_surface"],
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=c["border_subtle"],
         )
-        make_side_btn(
-            "Config. da Empresa",
-            lambda: abrir_config_empresa(self.root),
+        card_right.pack(fill="y")
+
+        frame_total = tk.Frame(card_right, bg=c["bg_surface"])
+        frame_total.pack(fill="x", padx=16, pady=(16, 8))
+
+        tk.Label(
+            frame_total,
+            text="TOTAL A PAGAR",
+            bg=c["bg_surface"],
+            fg=c["text_secondary"],
+            font=(f["family"], f["size_sm"]),
+        ).pack(anchor="w")
+
+        self.label_total_valor = tk.Label(
+            frame_total,
+            text="R$ 0,00",
+            bg=c["bg_surface"],
+            fg=c["text_primary"],
+            font=(f["family"], f["size_xxl"], "bold"),
+        )
+        self.label_total_valor.pack(anchor="w", pady=(4, 0))
+
+        tk.Frame(
+            card_right, bg=c["border_subtle"], height=1
+        ).pack(fill="x", padx=16, pady=(0, 8))
+
+        frame_actions = tk.Frame(card_right, bg=c["bg_surface"])
+        frame_actions.pack(fill="x", padx=16, pady=(8, 16))
+
+        tk.Label(
+            frame_actions,
+            text="Atalhos rápidos",
+            bg=c["bg_surface"],
+            fg=c["text_secondary"],
+            font=(f["family"], f["size_sm"]),
+        ).pack(anchor="w", pady=(0, 6))
+
+        def action_button(text, cmd):
+            btn = tk.Button(
+                frame_actions,
+                text=text,
+                bg=c["accent_secondary"],
+                fg=c["text_primary"],
+                activebackground=c["accent_secondary_hover"],
+                activeforeground=c["text_primary"],
+                bd=0,
+                relief="flat",
+                font=(f["family"], f["size_sm"]),
+                anchor="w",
+                padx=12,
+                pady=6,
+                justify="left",
+                command=safe_command(cmd),
+            )
+            btn.pack(fill="x", pady=3)
+            return btn
+
+        action_button(
+            "Cadastro de Produtos", lambda: abrir_cadastro_produtos(self.root)
+        )
+        action_button("Modo Etiquetas", self._abrir_modo_etiquetas)
+        action_button(
+            "Relatório de Caixa (Dia)", lambda: abrir_relatorio_caixa_dia(self.root)
+        )
+        action_button(
+            "Configurações da Empresa", lambda: abrir_config_empresa(self.root)
         )
 
     # --------------------------------------------------------
@@ -353,7 +469,9 @@ class PDVApp:
         menu_bar.add_cascade(label="PDV", menu=menu_pdv)
 
         menu_prod = tk.Menu(menu_bar, tearoff=0)
-        menu_prod.add_command(label="Cadastro de Produtos", command=lambda: abrir_cadastro_produtos(self.root))
+        menu_prod.add_command(
+            label="Cadastro de Produtos", command=lambda: abrir_cadastro_produtos(self.root)
+        )
         menu_prod.add_command(label="Modo Etiquetas", command=self._abrir_modo_etiquetas)
         menu_bar.add_cascade(label="Produtos", menu=menu_prod)
 
@@ -392,7 +510,7 @@ class PDVApp:
     def _adicionar_item_ui(self):
         codigo = self.entry_codigo.get().strip()
         if not codigo:
-            messagebox.showwarning("Atenção", "Informe o código.")
+            messagebox.showwarning("Atenção", "Informe o código de barras.")
             return
 
         qtd_txt = self.entry_qtd.get().strip() or "1"
@@ -403,12 +521,11 @@ class PDVApp:
             return
 
         resultado = pf.adicionar_item(LISTA_ITENS, codigo, qtd)
-
         if isinstance(resultado, dict) and resultado.get("erro"):
             messagebox.showerror("Erro", resultado["erro"])
             return
 
-        atualizar_tabela(self.tree, self.label_total)
+        atualizar_tabela(self.tree, self.label_total_valor)
 
         self.entry_codigo.delete(0, tk.END)
         self.entry_qtd.delete(0, tk.END)
@@ -419,213 +536,222 @@ class PDVApp:
         item_sel = self.tree.focus()
         if not item_sel:
             return
-
         index = self.tree.index(item_sel)
         pf.remover_item(LISTA_ITENS, index)
-        atualizar_tabela(self.tree, self.label_total)
+        atualizar_tabela(self.tree, self.label_total_valor)
 
     def _limpar(self):
         LISTA_ITENS.clear()
-        atualizar_tabela(self.tree, self.label_total)
+        atualizar_tabela(self.tree, self.label_total_valor)
 
     # =======================================================
-    # TELA DE PAGAMENTO BLACK PREMIUM
+    # TELA DE PAGAMENTO – ESTILO CLEAN
     # =======================================================
     def _abrir_tela_pagamento(self):
         if not LISTA_ITENS:
             messagebox.showwarning("Atenção", "Não há itens no carrinho.")
             return
 
+        c = THEME["colors"]
+        f = THEME["font"]
+
         total = pf.calcular_total(LISTA_ITENS)
 
-        janela = tk.Toplevel(self.root)
-        janela.title("Pagamento")
-        janela.geometry("520x460")
-        janela.configure(bg="#121212")
-        janela.grab_set()
-        janela.focus_force()
+        win = tk.Toplevel(self.root)
+        win.title("Pagamento")
+        win.configure(bg=c["bg_page"])
+        win.geometry("460x420")
+        win.resizable(False, False)
+        win.grab_set()
+        win.focus_force()
+
+        card = tk.Frame(
+            win,
+            bg=c["bg_surface"],
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=c["border_subtle"],
+        )
+        card.pack(fill="both", expand=True, padx=32, pady=24)
 
         tk.Label(
-            janela,
-            text=f"TOTAL A PAGAR",
-            bg="#121212",
-            fg="#BBBBBB",
-            font=("Segoe UI", 10),
-        ).pack(pady=(15, 0))
+            card,
+            text="Total a receber",
+            bg=c["bg_surface"],
+            fg=c["text_secondary"],
+            font=(f["family"], f["size_sm"]),
+        ).pack(anchor="w", pady=(10, 0))
 
         tk.Label(
-            janela,
+            card,
             text=format_money(total),
-            bg="#121212",
-            fg="#4CAF50",
-            font=("Segoe UI", 24, "bold"),
-        ).pack(pady=(0, 10))
+            bg=c["bg_surface"],
+            fg=c["text_primary"],
+            font=(f["family"], f["size_xxl"], "bold"),
+        ).pack(anchor="w", pady=(0, 10))
+
+        body = tk.Frame(card, bg=c["bg_surface"])
+        body.pack(fill="both", expand=True, pady=(8, 0))
 
         forma_var = tk.StringVar(value="")
+        win.entry_valor = None
+        win.qr_label = None
 
-        frame_botoes = tk.Frame(janela, bg="#121212")
-        frame_botoes.pack(pady=10)
+        frame_buttons = tk.Frame(body, bg=c["bg_surface"])
+        frame_buttons.pack(side="left", fill="y", padx=(0, 12))
 
-        frame_detalhes = tk.Frame(janela, bg="#121212")
-        frame_detalhes.pack(fill="both", expand=True, padx=15, pady=10)
+        frame_detail = tk.Frame(body, bg=c["bg_surface"])
+        frame_detail.pack(side="right", fill="both", expand=True)
 
-        janela.entry_valor = None
-        janela.qr_label = None
-
-        def limpar_detalhes():
-            for w in frame_detalhes.winfo_children():
+        def limpar_detail():
+            for w in frame_detail.winfo_children():
                 w.destroy()
-            janela.entry_valor = None
-            janela.qr_label = None
+            win.entry_valor = None
+            win.qr_label = None
+
+        def button_payment(text, cmd):
+            return tk.Button(
+                frame_buttons,
+                text=text,
+                bg=c["accent_secondary"],
+                fg=c["text_primary"],
+                activebackground=c["accent_secondary_hover"],
+                activeforeground=c["text_primary"],
+                bd=0,
+                relief="flat",
+                font=(f["family"], f["size_sm"], "bold"),
+                padx=12,
+                pady=8,
+                anchor="w",
+                command=safe_command(cmd),
+            )
 
         def selecionar_dinheiro():
             forma_var.set("DINHEIRO")
-            limpar_detalhes()
+            limpar_detail()
             tk.Label(
-                frame_detalhes,
-                text="Pagamento em DINHEIRO",
-                bg="#121212",
-                fg="#FFFFFF",
-                font=("Segoe UI", 11, "bold"),
-            ).pack(anchor="w", pady=5)
+                frame_detail,
+                text="Pagamento em dinheiro",
+                bg=c["bg_surface"],
+                fg=c["text_primary"],
+                font=(f["family"], f["size_md"], "bold"),
+            ).pack(anchor="w", pady=(0, 4))
             tk.Label(
-                frame_detalhes,
-                text="Valor recebido:",
-                bg="#121212",
-                fg="#CCCCCC",
+                frame_detail,
+                text="Valor recebido do cliente:",
+                bg=c["bg_surface"],
+                fg=c["text_secondary"],
+                font=(f["family"], f["size_sm"]),
             ).pack(anchor="w")
+
             entry = tk.Entry(
-                frame_detalhes,
-                width=15,
-                font=("Consolas", 11),
-                bg="#1E1E1E",
-                fg="#FFFFFF",
-                insertbackground="#FFFFFF",
+                frame_detail,
+                width=12,
+                font=(f["family"], f["size_md"]),
+                bg=c["bg_surface"],
+                fg=c["text_primary"],
                 relief="flat",
+                highlightthickness=1,
+                highlightbackground=c["border_subtle"],
+                highlightcolor=c["border_focus"],
+                insertbackground=c["text_primary"],
             )
-            entry.pack(anchor="w", pady=5)
+            entry.pack(anchor="w", pady=(4, 0))
             entry.insert(0, f"{total:.2f}")
-            janela.entry_valor = entry
             entry.focus()
+            win.entry_valor = entry
 
         def selecionar_pix():
             forma_var.set("PIX")
-            limpar_detalhes()
+            limpar_detail()
             tk.Label(
-                frame_detalhes,
+                frame_detail,
                 text="Pagamento via PIX",
-                bg="#121212",
-                fg="#FFFFFF",
-                font=("Segoe UI", 11, "bold"),
-            ).pack(anchor="w", pady=5)
-
+                bg=c["bg_surface"],
+                fg=c["text_primary"],
+                font=(f["family"], f["size_md"], "bold"),
+            ).pack(anchor="w", pady=(0, 4))
             tk.Label(
-                frame_detalhes,
-                text="Mostre este QR Code ao cliente.\n"
-                     "Se não aparecer, use a chave PIX no cupom.",
-                bg="#121212",
-                fg="#CCCCCC",
+                frame_detail,
+                text="Mostre o QR Code ao cliente.\nA chave PIX também sairá no cupom.",
+                bg=c["bg_surface"],
+                fg=c["text_secondary"],
+                font=(f["family"], f["size_xs"]),
                 justify="left",
-            ).pack(anchor="w", pady=5)
+            ).pack(anchor="w", pady=(0, 4))
 
             caminho_qr = gerar_qrcode_pix(total)
-
             if caminho_qr and os.path.isfile(caminho_qr):
                 try:
                     img = tk.PhotoImage(file=caminho_qr)
-                    lbl = tk.Label(frame_detalhes, image=img, bg="#121212")
+                    lbl = tk.Label(frame_detail, image=img, bg=c["bg_surface"])
                     lbl.image = img
-                    lbl.pack(pady=5)
-                    janela.qr_label = lbl
+                    lbl.pack(pady=(4, 0))
+                    win.qr_label = lbl
                 except Exception as e:
                     tk.Label(
-                        frame_detalhes,
+                        frame_detail,
                         text=f"Não foi possível exibir o QR Code.\n{e}",
-                        bg="#121212",
-                        fg="#FF5252",
-                    ).pack(anchor="w", pady=5)
+                        bg=c["bg_surface"],
+                        fg=c["feedback_error"],
+                        font=(f["family"], f["size_xs"]),
+                        justify="left",
+                    ).pack(anchor="w", pady=(4, 0))
             else:
                 tk.Label(
-                    frame_detalhes,
-                    text="QR Code não gerado.\n"
-                         "Verifique chave PIX e biblioteca 'qrcode'.",
-                    bg="#121212",
-                    fg="#FF5252",
-                ).pack(anchor="w", pady=5)
+                    frame_detail,
+                    text="QR Code não gerado.\nVerifique chave PIX e biblioteca 'qrcode'.",
+                    bg=c["bg_surface"],
+                    fg=c["feedback_error"],
+                    font=(f["family"], f["size_xs"]),
+                    justify="left",
+                ).pack(anchor="w", pady=(4, 0))
 
         def selecionar_cartao():
             forma_var.set("CARTÃO")
-            limpar_detalhes()
+            limpar_detail()
             tk.Label(
-                frame_detalhes,
-                text="Pagamento no CARTÃO",
-                bg="#121212",
-                fg="#FFFFFF",
-                font=("Segoe UI", 11, "bold"),
-            ).pack(anchor="w", pady=5)
+                frame_detail,
+                text="Pagamento no cartão",
+                bg=c["bg_surface"],
+                fg=c["text_primary"],
+                font=(f["family"], f["size_md"], "bold"),
+            ).pack(anchor="w", pady=(0, 4))
             tk.Label(
-                frame_detalhes,
-                text="Passe o cartão na maquininha\n"
-                     "e clique em 'Confirmar Pagamento' após aprovação.",
-                bg="#121212",
-                fg="#CCCCCC",
+                frame_detail,
+                text="Passe o cartão na maquininha e\nconfirme após a aprovação.",
+                bg=c["bg_surface"],
+                fg=c["text_secondary"],
+                font=(f["family"], f["size_xs"]),
                 justify="left",
-            ).pack(anchor="w", pady=5)
+            ).pack(anchor="w", pady=(0, 4))
 
-        btn_style = {
-            "width": 12,
-            "height": 2,
-            "font": ("Segoe UI", 11, "bold"),
-            "relief": "flat",
-            "fg": "#FFFFFF",
-            "padx": 8,
-        }
-        tk.Button(
-            frame_botoes,
-            text="DINHEIRO",
-            bg="#FFC107",
-            command=selecionar_dinheiro,
-            **btn_style,
-        ).grid(row=0, column=0, padx=5, pady=5)
+        button_payment("DINHEIRO", selecionar_dinheiro).pack(fill="x", pady=2)
+        button_payment("PIX", selecionar_pix).pack(fill="x", pady=2)
+        button_payment("CARTÃO", selecionar_cartao).pack(fill="x", pady=2)
 
-        tk.Button(
-            frame_botoes,
-            text="PIX",
-            bg="#00C853",
-            command=selecionar_pix,
-            **btn_style,
-        ).grid(row=0, column=1, padx=5, pady=5)
+        # FOOTER CONFIRMAR/CANCELAR
+        footer = tk.Frame(card, bg=c["bg_surface"])
+        footer.pack(fill="x", pady=(12, 10))
 
-        tk.Button(
-            frame_botoes,
-            text="CARTÃO",
-            bg="#2962FF",
-            command=selecionar_cartao,
-            **btn_style,
-        ).grid(row=0, column=2, padx=5, pady=5)
-
-        # Botões confirmar / cancelar
-        frame_bottom = tk.Frame(janela, bg="#121212")
-        frame_bottom.pack(fill="x", pady=15)
-
-        def confirmar_pagamento():
+        def confirmar():
             forma = forma_var.get()
             if not forma:
-                messagebox.showwarning("Atenção", "Selecione uma forma de pagamento.")
+                messagebox.showwarning("Atenção", "Selecione a forma de pagamento.")
                 return
 
             valor_recebido = None
             if forma == "DINHEIRO":
-                entry = janela.entry_valor
+                entry = win.entry_valor
                 if not entry:
                     messagebox.showerror("Erro", "Campo de valor não encontrado.")
                     return
-                valor_txt = entry.get().strip()
-                if not valor_txt:
+                txt = entry.get().strip()
+                if not txt:
                     messagebox.showwarning("Atenção", "Informe o valor recebido.")
                     return
                 try:
-                    valor_recebido = float(valor_txt.replace(",", "."))
+                    valor_recebido = float(txt.replace(",", "."))
                 except ValueError:
                     messagebox.showerror("Erro", "Valor recebido inválido.")
                     return
@@ -652,34 +778,40 @@ class PDVApp:
                 )
 
             LISTA_ITENS.clear()
-            atualizar_tabela(self.tree, self.label_total)
-            janela.destroy()
+            atualizar_tabela(self.tree, self.label_total_valor)
+            win.destroy()
 
-        def cancelar_pagamento():
-            janela.destroy()
+        def cancelar():
+            win.destroy()
 
         tk.Button(
-            frame_bottom,
-            text="Confirmar Pagamento",
-            bg="#00C853",
-            fg="#FFFFFF",
-            font=("Segoe UI", 10, "bold"),
+            footer,
+            text="Cancelar",
+            command=safe_command(cancelar),
+            bg=c["accent_secondary"],
+            fg=c["text_primary"],
+            activebackground=c["accent_secondary_hover"],
+            activeforeground=c["text_primary"],
+            bd=0,
             relief="flat",
+            font=(f["family"], f["size_sm"]),
+            padx=16,
+            pady=6,
+        ).pack(side="right", padx=(0, 6))
+
+        tk.Button(
+            footer,
+            text="Confirmar pagamento",
+            command=safe_command(confirmar),
+            bg=c["accent_primary"],
+            fg=c["text_inverse"],
+            activebackground="#000000",
+            activeforeground=c["text_inverse"],
+            bd=0,
+            relief="flat",
+            font=(f["family"], f["size_sm"], "bold"),
             padx=18,
             pady=6,
-            command=confirmar_pagamento,
-        ).pack(side="right", padx=10)
-
-        tk.Button(
-            frame_bottom,
-            text="Cancelar",
-            bg="#E53935",
-            fg="#FFFFFF",
-            font=("Segoe UI", 10, "bold"),
-            relief="flat",
-            padx=14,
-            pady=6,
-            command=cancelar_pagamento,
         ).pack(side="right")
 
     # =======================================================

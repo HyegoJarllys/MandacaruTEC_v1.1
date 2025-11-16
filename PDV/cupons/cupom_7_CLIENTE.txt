@@ -5,17 +5,15 @@ Cidade/UF
 Tel: (00) 0000-0000
 ----------------------------------------
 VENDA: 7
-DATA: 2025-11-15 00:13:14
+DATA: 2025-11-16 09:06:00
 ----------------------------------------
 ITENS
 QTD DESC          VL.UN   VL.TOT
 ----------------------------------------
- 12 COCO           12.00  144.00
+  1 COCO           12.00   12.00
 ----------------------------------------
-TOTAL: R$ 144,00
-PAGAMENTO: DINHEIRO
-RECEBIDO: R$ 150,00
-TROCO:    R$ 6,00
+TOTAL: R$ 12,00
+PAGAMENTO: CARTÃO
 ----------------------------------------
        OBRIGADO PELA PREFERÊNCIA!
          SISTEMA MANDACARU TEC

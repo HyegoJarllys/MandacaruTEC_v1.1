@@ -1,408 +1,483 @@
+import os
 import tkinter as tk
-from tkinter import ttk, messagebox
-from db import get_connection
+from tkinter import ttk, messagebox, filedialog
+
+from PIL import Image, ImageDraw, ImageFont, ImageTk
+from reportlab.pdfgen import canvas as pdf_canvas
+from reportlab.lib.pagesizes import A4
+
+# ==============================
+# FONTES (tenta Arial do Windows, senão usa padrão)
+# ==============================
+
+def carregar_fonte(nome_arquivo, tamanho):
+    caminhos = [
+        nome_arquivo,
+        os.path.join("C:\\", "Windows", "Fonts", nome_arquivo),
+        os.path.join("C:\\", "Windows", "Fonts", nome_arquivo.upper()),
+    ]
+    for caminho in caminhos:
+        try:
+            return ImageFont.truetype(caminho, tamanho)
+        except Exception:
+            continue
+    return ImageFont.load_default()
 
 
-# ============================================================
-# BUSCA PRODUTO NO BANCO
-# ============================================================
-def buscar_produto_por_codigo(codigo_barras: str):
-    """
-    Busca 1 produto no banco pelo código de barras.
-    Retorna dict {"id", "codigo_barras", "nome", "preco"} ou None.
-    """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT id, codigo_barras, nome, preco FROM produtos WHERE codigo_barras = ?;",
-        (codigo_barras,),
+FONT_BOLD_G = carregar_fonte("arialbd.ttf", 80)
+FONT_BOLD_M = carregar_fonte("arialbd.ttf", 52)
+FONT_BOLD_P = carregar_fonte("arialbd.ttf", 34)
+FONT_REG_P = carregar_fonte("arial.ttf", 26)
+
+# ==============================
+# CORES PADRÃO ATACAREJO
+# ==============================
+
+COR_AMARELO = (250, 204, 21)
+COR_AMARELO_CLARO = (253, 230, 138)
+COR_VERMELHO = (239, 68, 68)
+COR_VERMELHO_ESCURO = (185, 28, 28)
+COR_AZUL = (37, 99, 235)
+COR_PRETO = (0, 0, 0)
+COR_BRANCO = (255, 255, 255)
+
+# ==============================
+# HELPERS
+# ==============================
+
+def rounded_rectangle(draw, xy, radius, fill):
+    draw.rounded_rectangle(xy, radius=radius, fill=fill)
+
+def texto_centro(draw, x, y, texto, font, fill):
+    draw.text((x, y), texto, font=font, fill=fill, anchor="mm")
+
+def format_preco(valor_str):
+    if not valor_str:
+        return ""
+    try:
+        v = float(str(valor_str).replace(",", "."))
+    except ValueError:
+        return ""
+    s = f"{v:,.2f}"
+    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {s}"
+
+# ==============================
+# TEMPLATES / MODELOS
+# ==============================
+
+TEMPLATES = {
+    "SÓ HOJE": {
+        "size": (900, 450),
+        "draw": "draw_so_hoje",
+    },
+    "OFERTA": {
+        "size": (900, 450),
+        "draw": "draw_oferta",
+    },
+    "OFERTA DA SEMANA": {
+        "size": (900, 450),
+        "draw": "draw_oferta_semana",
+    },
+    "COMBO": {
+        "size": (700, 900),
+        "draw": "draw_combo",
+    },
+    "LEVE X POR Y": {
+        "size": (900, 450),
+        "draw": "draw_leve_x_por_y",
+    },
+    "MEGA DESCONTO": {
+        "size": (700, 900),
+        "draw": "draw_mega_desconto",
+    },
+}
+
+# ==============================
+# FUNÇÕES DE DESENHO POR MODELO
+# ==============================
+
+def draw_so_hoje(dados):
+    w, h = TEMPLATES["SÓ HOJE"]["size"]
+    img = Image.new("RGB", (w, h), COR_BRANCO)
+    d = ImageDraw.Draw(img)
+
+    # faixa amarela em cima
+    rounded_rectangle(d, (0, 0, w, h), 26, COR_BRANCO)
+    d.rectangle((0, 0, w, int(h * 0.45)), fill=COR_AMARELO)
+
+    texto_centro(d, w / 2, h * 0.20, "SÓ HOJE", FONT_BOLD_M, COR_PRETO)
+
+    preco_fmt = format_preco(dados.get("preco"))
+    texto_centro(d, w / 2, h * 0.68, preco_fmt, FONT_BOLD_G, COR_PRETO)
+
+    und = (dados.get("unidade") or "").upper().strip()
+    if und:
+        texto_centro(d, w / 2, h * 0.88, und, FONT_REG_P, COR_PRETO)
+
+    return img
+
+
+def draw_oferta(dados):
+    w, h = TEMPLATES["OFERTA"]["size"]
+    img = Image.new("RGB", (w, h), COR_AMARELO)
+    d = ImageDraw.Draw(img)
+
+    rounded_rectangle(d, (0, 0, w, h), 26, COR_AMARELO)
+    d.rectangle((0, 0, w, int(h * 0.42)), fill=COR_VERMELHO)
+
+    texto_centro(d, w / 2, h * 0.20, "OFERTA", FONT_BOLD_M, COR_BRANCO)
+
+    preco_fmt = format_preco(dados.get("preco"))
+    texto_centro(d, w / 2, h * 0.70, preco_fmt, FONT_BOLD_G, COR_PRETO)
+
+    und = (dados.get("unidade") or "").upper().strip()
+    if und:
+        texto_centro(d, w / 2, h * 0.88, und, FONT_REG_P, COR_PRETO)
+
+    return img
+
+
+def draw_oferta_semana(dados):
+    w, h = TEMPLATES["OFERTA DA SEMANA"]["size"]
+    img = Image.new("RGB", (w, h), COR_BRANCO)
+    d = ImageDraw.Draw(img)
+
+    rounded_rectangle(d, (0, 0, w, h), 26, COR_BRANCO)
+    d.rectangle((0, 0, w, int(h * 0.40)), fill=COR_VERMELHO_ESCURO)
+
+    texto_centro(d, w / 2, h * 0.20, "OFERTA DA SEMANA", FONT_BOLD_M, COR_BRANCO)
+
+    preco_fmt = format_preco(dados.get("preco"))
+    texto_centro(d, w * 0.25, h * 0.66, preco_fmt, FONT_BOLD_G, COR_PRETO)
+
+    economia = dados.get("economia")
+    if economia:
+        econ_fmt = format_preco(economia)
+        txt = f"Você economiza {econ_fmt}"
+        d.text((w * 0.05, h * 0.84), txt, font=FONT_REG_P, fill=COR_PRETO, anchor="lm")
+
+    return img
+
+
+def draw_combo(dados):
+    w, h = TEMPLATES["COMBO"]["size"]
+    img = Image.new("RGB", (w, h), COR_BRANCO)
+    d = ImageDraw.Draw(img)
+
+    rounded_rectangle(d, (0, 0, w, h), 26, COR_BRANCO)
+
+    texto_centro(d, w / 2, h * 0.12, "COMBO", FONT_BOLD_M, COR_PRETO)
+
+    d.rectangle((0, int(h * 0.20), w, int(h * 0.42)), fill=COR_AMARELO)
+
+    preco_unit = dados.get("preco_unit")
+    und = (dados.get("unidade") or "UND.").upper().strip()
+    if preco_unit:
+        txt_unit = f"{format_preco(preco_unit)} {und}"
+        texto_centro(d, w / 2, h * 0.31, txt_unit, FONT_BOLD_P, COR_PRETO)
+
+    preco_total = dados.get("preco")
+    preco_total_fmt = format_preco(preco_total)
+    texto_centro(d, w / 2, h * 0.70, preco_total_fmt, FONT_BOLD_G, COR_PRETO)
+
+    return img
+
+
+def draw_leve_x_por_y(dados):
+    w, h = TEMPLATES["LEVE X POR Y"]["size"]
+    img = Image.new("RGB", (w, h), COR_BRANCO)
+    d = ImageDraw.Draw(img)
+
+    rounded_rectangle(d, (0, 0, w, h), 26, COR_BRANCO)
+
+    qtd_combo = dados.get("qtd_combo") or ""
+    txt_topo = f"LEVE {qtd_combo}".strip()
+
+    d.rectangle((0, 0, w, int(h * 0.50)), fill=COR_AZUL)
+
+    texto_centro(d, w / 2, h * 0.18, txt_topo, FONT_BOLD_M, COR_BRANCO)
+    texto_centro(d, w / 2, h * 0.36, "POR", FONT_BOLD_G, COR_BRANCO)
+
+    preco_fmt = format_preco(dados.get("preco"))
+    texto_centro(d, w * 0.30, h * 0.76, preco_fmt, FONT_BOLD_G, COR_PRETO)
+
+    return img
+
+
+def draw_mega_desconto(dados):
+    w, h = TEMPLATES["MEGA DESCONTO"]["size"]
+    img = Image.new("RGB", (w, h), COR_VERMELHO)
+    d = ImageDraw.Draw(img)
+
+    rounded_rectangle(d, (0, 0, w, h), 26, COR_VERMELHO)
+
+    texto_centro(d, w / 2, h * 0.18, "MEGA", FONT_BOLD_M, COR_AMARELO)
+    texto_centro(d, w / 2, h * 0.34, "DESCONTO", FONT_BOLD_M, COR_AMARELO)
+
+    preco_fmt = format_preco(dados.get("preco"))
+    texto_centro(d, w / 2, h * 0.70, preco_fmt, FONT_BOLD_G, COR_AMARELO_CLARO)
+
+    return img
+
+
+DRAW_FUNCS = {
+    "SÓ HOJE": draw_so_hoje,
+    "OFERTA": draw_oferta,
+    "OFERTA DA SEMANA": draw_oferta_semana,
+    "COMBO": draw_combo,
+    "LEVE X POR Y": draw_leve_x_por_y,
+    "MEGA DESCONTO": draw_mega_desconto,
+}
+
+# ==============================
+# EXPORTAÇÃO PARA PDF
+# ==============================
+
+def exportar_pdf(lista_imagens):
+    if not lista_imagens:
+        messagebox.showwarning("Aviso", "Nenhuma etiqueta gerada.")
+        return
+
+    caminho = filedialog.asksaveasfilename(
+        defaultextension=".pdf",
+        filetypes=[("PDF", "*.pdf")],
+        title="Salvar etiquetas em PDF",
     )
-    row = cur.fetchone()
-    conn.close()
+    if not caminho:
+        return
 
-    if not row:
-        return None
+    largura_pagina, altura_pagina = A4
+    c = pdf_canvas.Canvas(caminho, pagesize=A4)
 
-    return {
-        "id": row[0],
-        "codigo_barras": row[1],
-        "nome": row[2],
-        "preco": float(row[3]),
-    }
+    margem_x = 30
+    margem_y = 40
+    espac_x = 15
+    espac_y = 15
 
+    x = margem_x
+    y = altura_pagina - margem_y
 
-# ============================================================
-# TELA DE ETIQUETAS
-# ============================================================
-def abrir_modo_etiquetas(parent=None):
-    """
-    Tela de geração de etiquetas em estilo atacado.
+    largura_max = (largura_pagina - 2 * margem_x - 2 * espac_x) / 3  # 3 por linha
 
-    - Nome em MAIÚSCULO e negrito.
-    - Preço grande.
-    - Modo OFERTA com fundo amarelo e 'OFERTA' em vermelho.
-    - Lista / fila de etiquetas.
-    - Pré-visualização em grid.
-    """
+    for img in lista_imagens:
+        w, h = img.size
+        fator = largura_max / w
+        new_w = largura_max
+        new_h = h * fator
 
-    # ----- Janela -----
-    if parent is None:
-        janela = tk.Tk()
-    else:
-        janela = tk.Toplevel(parent)
+        tmp_path = "_tmp_etq.png"
+        img.resize((int(new_w), int(new_h)), Image.LANCZOS).save(tmp_path)
 
+        y_img = y - new_h
+        c.drawImage(tmp_path, x, y_img, width=new_w, height=new_h)
+
+        x += new_w + espac_x
+        if x + new_w > largura_pagina - margem_x:
+            x = margem_x
+            y -= new_h + espac_y
+            if y - new_h < margem_y:
+                c.showPage()
+                y = altura_pagina - margem_y
+
+    c.save()
+    if os.path.exists("_tmp_etq.png"):
+        os.remove("_tmp_etq.png")
+
+    messagebox.showinfo("Sucesso", "PDF gerado com sucesso!")
+
+# ==============================
+# JANELA TKINTER (MODO ETIQUETAS)
+# ==============================
+
+def abrir_etiquetas(parent=None):
+    janela = tk.Toplevel(parent) if parent is not None else tk.Toplevel()
     janela.title("Mandacaru TEC - Modo Etiquetas")
-    janela.geometry("980x650")
-    janela.configure(bg="#f7f7f7")
+    janela.geometry("1200x700")
+    janela.configure(bg="#f5f5f5")
 
-    # ========================================================
-    # LADO ESQUERDO - CONTROLE
-    # ========================================================
-    frame_left = tk.Frame(janela, bg="#f7f7f7")
+    frame_left = tk.Frame(janela, bg="#f5f5f5")
     frame_left.pack(side="left", fill="y", padx=10, pady=10)
 
-    # Código de Barras
-    tk.Label(frame_left, text="Código de Barras:", bg="#f7f7f7").grid(
-        row=0, column=0, sticky="w"
-    )
-    entry_codigo = tk.Entry(frame_left, width=25)
-    entry_codigo.grid(row=0, column=1, padx=5, pady=5)
+    row = 0
 
-    def on_buscar(_evt=None):
-        codigo = entry_codigo.get().strip()
-        if not codigo:
-            messagebox.showwarning("Aviso", "Digite um código de barras.")
-            return
+    tk.Label(frame_left, text="Modelo:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
+    modelos = list(TEMPLATES.keys())
+    combo_modelo = ttk.Combobox(frame_left, values=modelos, width=20, state="readonly")
+    combo_modelo.set("OFERTA")
+    combo_modelo.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    row += 1
 
-        prod = buscar_produto_por_codigo(codigo)
-        if not prod:
-            messagebox.showerror("Erro", "Produto não encontrado.")
-            return
+    tk.Label(frame_left, text="Preço:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
+    entry_preco = tk.Entry(frame_left, width=12)
+    entry_preco.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    row += 1
 
-        entry_nome.delete(0, tk.END)
-        entry_nome.insert(0, prod["nome"])
-        entry_preco.delete(0, tk.END)
-        entry_preco.insert(0, f"{prod['preco']:.2f}")
+    tk.Label(frame_left, text="UND/KG:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
+    entry_unidade = tk.Entry(frame_left, width=12)
+    entry_unidade.insert(0, "UND.")
+    entry_unidade.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    row += 1
 
-    btn_buscar = tk.Button(frame_left, text="Buscar (Enter)", command=on_buscar)
-    btn_buscar.grid(row=0, column=2, padx=5, pady=5)
+    tk.Label(frame_left, text="Economia (R$):", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
+    entry_economia = tk.Entry(frame_left, width=12)
+    entry_economia.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    row += 1
 
-    entry_codigo.bind("<Return>", on_buscar)
+    tk.Label(frame_left, text="Qtd. combo (LEVE X):", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
+    entry_qtd_combo = tk.Entry(frame_left, width=12)
+    entry_qtd_combo.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    row += 1
 
-    # Nome do produto
-    tk.Label(frame_left, text="Nome do Produto:", bg="#f7f7f7").grid(
-        row=1, column=0, sticky="w"
-    )
-    entry_nome = tk.Entry(frame_left, width=40)
-    entry_nome.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="w")
+    tk.Label(frame_left, text="Preço combo:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
+    entry_preco_combo = tk.Entry(frame_left, width=12)
+    entry_preco_combo.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    row += 1
 
-    # Preço
-    tk.Label(frame_left, text="Preço (R$):", bg="#f7f7f7").grid(
-        row=2, column=0, sticky="w"
-    )
-    entry_preco = tk.Entry(frame_left, width=15)
-    entry_preco.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+    tk.Label(frame_left, text="Qtd de cópias:", bg="#f5f5f5").grid(row=row, column=0, sticky="w")
+    entry_qtd_copias = tk.Entry(frame_left, width=12)
+    entry_qtd_copias.insert(0, "1")
+    entry_qtd_copias.grid(row=row, column=1, padx=5, pady=3, sticky="w")
+    row += 1
 
-    # Observação (ex: "POR KG", "À VISTA", etc.)
-    tk.Label(frame_left, text="Observação:", bg="#f7f7f7").grid(
-        row=3, column=0, sticky="w"
-    )
-    entry_obs = tk.Entry(frame_left, width=25)
-    entry_obs.insert(0, "À VISTA")
-    entry_obs.grid(row=3, column=1, columnspan=2, padx=5, pady=5, sticky="w")
+    imagens_geradas = []
+    preview_img_tk = {"img": None}
 
-    # Checkbox de oferta
-    var_oferta = tk.BooleanVar(value=False)
-    chk_oferta = tk.Checkbutton(
-        frame_left,
-        text="Etiqueta de OFERTA (destaque amarelo/vermelho)",
-        bg="#f7f7f7",
-        variable=var_oferta,
-    )
-    chk_oferta.grid(row=4, column=0, columnspan=3, sticky="w", pady=5)
-
-    # Quantidade de etiquetas
-    tk.Label(frame_left, text="Qtd de Etiquetas:", bg="#f7f7f7").grid(
-        row=5, column=0, sticky="w"
-    )
-    entry_qtd = tk.Entry(frame_left, width=10)
-    entry_qtd.insert(0, "1")
-    entry_qtd.grid(row=5, column=1, padx=5, pady=5, sticky="w")
-
-    # --------------------------------------------------------
-    # Tabela da Fila de Etiquetas
-    # --------------------------------------------------------
-    tk.Label(
-        frame_left,
-        text="Etiquetas na Fila:",
-        bg="#f7f7f7",
-        font=("Arial", 10, "bold"),
-    ).grid(row=6, column=0, columnspan=3, sticky="w", pady=(15, 5))
-
-    tree_cols = ("produto", "preco", "oferta", "obs", "qtd")
-    tree_etq = ttk.Treeview(frame_left, columns=tree_cols, show="headings", height=8)
-    tree_etq.heading("produto", text="Produto")
-    tree_etq.heading("preco", text="Preço")
-    tree_etq.heading("oferta", text="OFERTA")
-    tree_etq.heading("obs", text="Obs.")
-    tree_etq.heading("qtd", text="Qtd")
-
-    tree_etq.column("produto", width=220)
-    tree_etq.column("preco", width=80, anchor="e")
-    tree_etq.column("oferta", width=60, anchor="center")
-    tree_etq.column("obs", width=100)
-    tree_etq.column("qtd", width=40, anchor="center")
-
-    tree_etq.grid(row=7, column=0, columnspan=3, pady=5, sticky="nsew")
-
-    # Deixar a linha da tabela expansível
-    frame_left.grid_rowconfigure(7, weight=1)
-
-    # Lista de etiquetas na fila
-    ETIQUETAS = []
-
-    def on_adicionar_etiqueta():
-        nome = entry_nome.get().strip()
-        preco_str = entry_preco.get().strip()
-        obs = entry_obs.get().strip()
-        qtd_str = entry_qtd.get().strip()
-        oferta = var_oferta.get()
-
-        if not nome or not preco_str or not qtd_str:
-            messagebox.showwarning(
-                "Aviso", "Preencha nome, preço e quantidade antes de adicionar."
-            )
-            return
-
-        try:
-            preco = float(preco_str.replace(",", "."))
-        except ValueError:
-            messagebox.showerror("Erro", "Preço inválido.")
-            return
-
-        try:
-            qtd = int(qtd_str)
-            if qtd <= 0:
-                raise ValueError
-        except ValueError:
-            messagebox.showerror("Erro", "Quantidade inválida.")
-            return
-
-        etq = {
-            "nome": nome,
-            "preco": preco,
-            "obs": obs,
-            "oferta": oferta,
-            "qtd": qtd,
-        }
-        ETIQUETAS.append(etq)
-
-        tree_etq.insert(
-            "",
-            "end",
-            values=(
-                nome,
-                f"R$ {preco:.2f}",
-                "SIM" if oferta else "NÃO",
-                obs,
-                qtd,
-            ),
-        )
-
-        # Deixa quantidade e oferta prontas pra próxima etiqueta
-        entry_qtd.delete(0, tk.END)
-        entry_qtd.insert(0, "1")
-
-    btn_add_etq = tk.Button(
-        frame_left,
-        text="Adicionar à Fila",
-        command=on_adicionar_etiqueta,
-        bg="#4CAF50",
-        fg="white",
-    )
-    btn_add_etq.grid(row=8, column=0, columnspan=3, pady=10, sticky="ew")
-
-    def on_remover_selecionada():
-        sel = tree_etq.selection()
-        if not sel:
-            return
-        idx = tree_etq.index(sel[0])
-        tree_etq.delete(sel[0])
-        if 0 <= idx < len(ETIQUETAS):
-            ETIQUETAS.pop(idx)
-
-    btn_remover = tk.Button(
-        frame_left,
-        text="Remover Selecionada",
-        command=on_remover_selecionada,
-        bg="#f44336",
-        fg="white",
-    )
-    btn_remover.grid(row=9, column=0, columnspan=3, pady=5, sticky="ew")
-
-    def on_limpar_fila():
-        ETIQUETAS.clear()
-        for item in tree_etq.get_children():
-            tree_etq.delete(item)
-
-    btn_limpar = tk.Button(
-        frame_left,
-        text="Limpar Fila",
-        command=on_limpar_fila,
-        bg="#555555",
-        fg="white",
-    )
-    btn_limpar.grid(row=10, column=0, columnspan=3, pady=5, sticky="ew")
-
-    # ========================================================
-    # LADO DIREITO - PRÉ-VISUALIZAÇÃO
-    # ========================================================
-    frame_right = tk.Frame(janela, bg="#dcdcdc")
-    frame_right.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+    frame_preview = tk.Frame(janela, bg="#dddddd")
+    frame_preview.pack(side="right", fill="both", expand=True, padx=10, pady=10)
 
     tk.Label(
-        frame_right,
-        text="Pré-visualização das Etiquetas (estilo atacado):",
-        bg="#dcdcdc",
-        font=("Arial", 10, "bold"),
+        frame_preview,
+        text="Pré-visualização da etiqueta:",
+        bg="#dddddd",
+        font=("Segoe UI", 10, "bold"),
     ).pack(anchor="w", pady=5, padx=5)
 
-    canvas = tk.Canvas(frame_right, bg="white")
-    canvas.pack(fill="both", expand=True, padx=5, pady=5)
+    canvas_preview = tk.Canvas(frame_preview, bg="white")
+    canvas_preview.pack(fill="both", expand=True, padx=5, pady=5)
 
-    # --------------------------------------------------------
-    # DESENHAR ETIQUETAS
-    # --------------------------------------------------------
-    def desenhar_etiquetas():
-        canvas.delete("all")
-
-        if not ETIQUETAS:
-            canvas.create_text(
-                20,
-                20,
-                anchor="nw",
-                text="Nenhuma etiqueta na fila.\nAdicione etiquetas à esquerda.",
-                fill="black",
-                font=("Arial", 12),
-            )
+    def atualizar_preview(img):
+        canvas_preview.delete("all")
+        if img is None:
             return
 
-        # Configuração do layout
-        margem_x = 25
-        margem_y = 25
-        largura = 260
-        altura = 130
-        espac_x = 15
-        espac_y = 15
-        colunas = 3  # 3 por linha
+        w, h = img.size
+        max_w, max_h = 700, 450
+        fator = min(max_w / w, max_h / h, 1)
+        new_w = int(w * fator)
+        new_h = int(h * fator)
 
-        x = margem_x
-        y = margem_y
-        count = 0
+        img_resized = img.resize((new_w, new_h), Image.LANCZOS)
+        img_tk = ImageTk.PhotoImage(img_resized)
+        preview_img_tk["img"] = img_tk
 
-        for etq in ETIQUETAS:
-            for _ in range(etq["qtd"]):
-                oferta = etq["oferta"]
-                nome = etq["nome"].upper()  # MAIÚSCULO
-                preco = etq["preco"]
-                obs = etq["obs"]
+        cw = int(canvas_preview.winfo_width() or max_w)
+        ch = int(canvas_preview.winfo_height() or max_h)
 
-                # Fundo
-                if oferta:
-                    bg_color = "#FFF176"  # amarelo oferta
-                else:
-                    bg_color = "#FFFFFF"  # branco
+        canvas_preview.create_image(cw // 2, ch // 2, image=img_tk, anchor="center")
 
-                canvas.create_rectangle(
-                    x,
-                    y,
-                    x + largura,
-                    y + altura,
-                    fill=bg_color,
-                    outline="black",
-                    width=2,
-                )
+    def gerar_etiqueta():
+        modelo = combo_modelo.get()
 
-                # Linha superior: OFERTA (se marcado)
-                if oferta:
-                    # Faixa vermelha em cima
-                    canvas.create_rectangle(
-                        x,
-                        y,
-                        x + largura,
-                        y + 30,
-                        fill="#D32F2F",
-                        outline="#D32F2F",
-                    )
-                    canvas.create_text(
-                        x + largura / 2,
-                        y + 15,
-                        text="OFERTA",
-                        fill="white",
-                        font=("Arial", 16, "bold"),
-                    )
-                    offset_top = 38
-                else:
-                    offset_top = 12
+        dados = {
+            "preco": entry_preco.get().strip(),
+            "unidade": entry_unidade.get().strip(),
+            "economia": entry_economia.get().strip(),
+            "qtd_combo": entry_qtd_combo.get().strip(),
+            "preco_combo": entry_preco_combo.get().strip(),
+        }
 
-                # Nome do produto - MAIÚSCULO, negrito
-                canvas.create_text(
-                    x + 8,
-                    y + offset_top,
-                    anchor="nw",
-                    text=nome,
-                    fill="black",
-                    font=("Arial", 10, "bold"),
-                    width=largura - 16,
-                )
+        # cálculo do combo (preço unitário)
+        preco_combo_float = None
+        qtd_combo_int = None
+        try:
+            if dados["preco_combo"]:
+                preco_combo_float = float(dados["preco_combo"].replace(",", "."))
+        except ValueError:
+            preco_combo_float = None
+        try:
+            if dados["qtd_combo"]:
+                qtd_combo_int = int(dados["qtd_combo"])
+        except ValueError:
+            qtd_combo_int = None
 
-                # Observação (ex: POR KG / À VISTA)
-                if obs:
-                    canvas.create_text(
-                        x + 8,
-                        y + altura - 35,
-                        anchor="nw",
-                        text=obs.upper(),
-                        fill="black",
-                        font=("Arial", 9, "bold"),
-                    )
+        if modelo == "COMBO" and preco_combo_float and qtd_combo_int and qtd_combo_int > 0:
+            dados["preco_unit"] = preco_combo_float / qtd_combo_int
+        else:
+            dados["preco_unit"] = None
 
-                # Preço grande, centralizado
-                canvas.create_text(
-                    x + largura / 2,
-                    y + altura - 60,
-                    text=f"R$ {preco:.2f}",
-                    fill="black",
-                    font=("Arial", 20, "bold"),
-                )
+        func_draw = DRAW_FUNCS.get(modelo)
+        if not func_draw:
+            messagebox.showerror("Erro", f"Modelo '{modelo}' não suportado.")
+            return
 
-                # Avança posição na grade
-                count += 1
-                if count % colunas == 0:
-                    x = margem_x
-                    y += altura + espac_y
-                else:
-                    x += largura + espac_x
+        img = func_draw(dados)
+        imagens_geradas.clear()
 
-        canvas.config(scrollregion=canvas.bbox("all"))
+        try:
+            copias = int(entry_qtd_copias.get().strip())
+        except ValueError:
+            copias = 1
+        copias = max(1, copias)
 
-    btn_preview = tk.Button(
+        for _ in range(copias):
+            imagens_geradas.append(img.copy())
+
+        atualizar_preview(img)
+
+    def salvar_png():
+        if not imagens_geradas:
+            messagebox.showwarning("Aviso", "Nenhuma etiqueta gerada.")
+            return
+        caminho = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png")],
+            title="Salvar etiqueta em PNG",
+        )
+        if not caminho:
+            return
+        imagens_geradas[0].save(caminho)
+        messagebox.showinfo("Sucesso", "PNG salvo com sucesso!")
+
+    def salvar_pdf():
+        if not imagens_geradas:
+            messagebox.showwarning("Aviso", "Nenhuma etiqueta gerada.")
+            return
+        exportar_pdf(imagens_geradas)
+
+    tk.Button(
         frame_left,
-        text="Atualizar Pré-visualização",
-        command=desenhar_etiquetas,
-    )
-    btn_preview.grid(row=11, column=0, columnspan=3, pady=10, sticky="ew")
+        text="Gerar Etiqueta",
+        command=gerar_etiqueta,
+        bg="#111111",
+        fg="white",
+    ).grid(row=row, column=0, columnspan=2, pady=(12, 4), sticky="ew")
+    row += 1
 
-    # Ao abrir, mostra preview vazio
-    desenhar_etiquetas()
+    tk.Button(
+        frame_left,
+        text="Salvar PNG",
+        command=salvar_png,
+        bg="#e5e5e5",
+        fg="#111111",
+    ).grid(row=row, column=0, columnspan=2, pady=2, sticky="ew")
+    row += 1
 
-    # Fechar janela standalone
-    if parent is None:
-        janela.mainloop()
+    tk.Button(
+        frame_left,
+        text="Exportar PDF (A4)",
+        command=salvar_pdf,
+        bg="#e5e5e5",
+        fg="#111111",
+    ).grid(row=row, column=0, columnspan=2, pady=2, sticky="ew")
+    row += 1
 
+    janela.after(200, lambda: atualizar_preview(None))
+    return janela
 
-# ============================================================
-# EXECUÇÃO DIRETA (TESTE FORA DO PDV)
-# ============================================================
-if __name__ == "__main__":
-    abrir_modo_etiquetas()
+# ==============================
+# FUNÇÃO QUE O PDV CHAMA
+# ==============================
+
+def abrir_modo_etiquetas(parent=None):
+    abrir_etiquetas(parent)
