@@ -1,0 +1,24 @@
+              SUA EMPRESA
+CNPJ: 00.000.000/0000-00
+Endereço não configurado
+Cidade/UF
+Tel: (00) 0000-0000
+----------------------------------------
+VENDA: 10
+DATA: 2025-11-16 13:48:54
+----------------------------------------
+ITENS
+QTD DESC          VL.UN   VL.TOT
+----------------------------------------
+  5 COCO           12.00   60.00
+  8 CHOCOLATE       8.00   64.00
+  8 CAJU            8.00   64.00
+----------------------------------------
+TOTAL: R$ 188,00
+PAGAMENTO: DINHEIRO
+RECEBIDO: R$ 250,00
+TROCO:    R$ 62,00
+----------------------------------------
+       OBRIGADO PELA PREFERÊNCIA!
+         SISTEMA MANDACARU TEC
+----------------------------------------
