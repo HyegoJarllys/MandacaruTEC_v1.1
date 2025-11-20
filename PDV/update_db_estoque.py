@@ -1,25 +1,47 @@
-from db import get_connection
+# update_db_estoque.py
+import sqlite3
+import os
 
-def adicionar_colunas_estoque():
-    conn = get_connection()
+DB_PATH = os.path.join(os.path.dirname(__file__), "mandacarutec.db")
+
+
+def ensure_columns():
+    conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    # Verificar colunas existentes
-    cur.execute("PRAGMA table_info(produtos);")
-    colunas = [row[1] for row in cur.fetchall()]  # row[1] é o nome da coluna
+    # Pega colunas atuais da tabela produtos
+    cur.execute("PRAGMA table_info(produtos)")
+    cols = {row[1] for row in cur.fetchall()}
 
-    if "estoque" not in colunas:
-        cur.execute("ALTER TABLE produtos ADD COLUMN estoque REAL DEFAULT 0;")
-        print("Coluna 'estoque' adicionada à tabela produtos.")
+    def add_column(name, type_sql, default=None):
+        if name not in cols:
+            sql = f"ALTER TABLE produtos ADD COLUMN {name} {type_sql}"
+            if default is not None:
+                sql += f" DEFAULT {default}"
+            cur.execute(sql)
 
-    if "estoque_minimo" not in colunas:
-        cur.execute("ALTER TABLE produtos ADD COLUMN estoque_minimo REAL DEFAULT 0;")
-        print("Coluna 'estoque_minimo' adicionada à tabela produtos.")
+    # Garante todas as colunas novas
+    add_column("preco_venda", "REAL", 0)
+    add_column("preco_custo", "REAL", 0)
+    add_column("validade", "TEXT", "'0000-00-00'")
+    add_column("estoque_atual", "INTEGER", 0)
+    add_column("estoque_minimo", "INTEGER", 0)
+    add_column("unidade_venda", "TEXT", "'UNIDADE'")
+    add_column("categoria", "TEXT", "''")
+    add_column("descricao", "TEXT", "''")
+
+    # Tabela de categorias
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS categorias (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL UNIQUE
+        );
+    """)
 
     conn.commit()
     conn.close()
-    print("Atualização de estrutura de produtos concluída.")
 
 
 if __name__ == "__main__":
-    adicionar_colunas_estoque()
+    ensure_columns()
+    print("OK! Colunas e tabela de categorias garantidas.")
