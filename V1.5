@@ -1,0 +1,285 @@
+SOftware De Interface
+
+Burocracia ( Nota Fiscal)
+Informações importantes para desenvolver seu software
+Requisitos técnicos:
+
+Certificado Digital: Seu software precisa assinar digitalmente os XMLs
+Web Services: Integração com os serviços SEFAZ (autorização, consulta, cancelamento, inutilização)
+Layout XML: Seguir o padrão nacional (atualmente em constante atualização - ver Notas Técnicas)
+Contingência offline: Permitir emissão sem internet e transmissão posterior.Cuidados essenciais:
+
+Atualizações constantes: A legislação muda frequentemente via Notas Técnicas
+Ambiente de homologação: Realizar testes obrigatórios antes de produção (autorização normal, contingência, cancelamento, inutilização) Sefaz
+Segurança: Armazenar XMLs por 5 anos
+Diferentes estados: Cada SEFAZ pode ter particularidades Como funciona a burocracia de notas na prática
+Para o DONO do mercadinho emitir notas, ele precisa:Foco: Seu tempo vai para IA e UX, não para burocracia fiscal
+1. Estar regularizado:
+
+Ter CNPJ ativo
+Ter Inscrição Estadual (IE)
+Estar em dia com impostos
+
+2. Se credenciar na SEFAZ do estado:
+
+Processo online no site da SEFAZ
+Simples e rápido (geralmente em 1-2 dias úteis)
+
+3. Ter Certificado Digital:
+
+Tipo A1 (arquivo, R$ 150-250/ano) ou A3 (token/cartão, R$ 200-350/3 anos)
+É como uma "senha" digital que assina as notas
+Compra em empresas certificadoras (Serasa, Valid, Certisign, etc.)
+
+4. Obter o CSC (token):
+
+Código fornecido gratuitamente pela SEFAZ após credenciamento
+É um código numérico simples (tipo: 123456)
+Foco: Seu tempo vai para IA e UX, não para burocracia fiscal
+
+
+{
+
+```
+
+**2. Interface de cadastro:**
+```
+[Dados Básicos] - Sempre visível
+- Descrição: _______
+- Preço: _______
+- Estoque: _______
+
+[▼ Dados Fiscais] - Colapsável
+  ⚠️ Necessário apenas se emitir Nota Fiscal
+  - NCM: _______  [?] O que é isso?
+  - CFOP: _______  [Usar padrão: 5102]
+  - Unidade: [UN ▼]
+
+
+
+### **VERSÃO 1.0 (Lançamento - Sem notas):**
+```
+✅ PDV básico
+✅ Estoque
+✅ Financeiro
+✅ IA/Insights
+❌ Dados fiscais (campos existem mas não obrigatórios)
+❌ Emissão de nota
+```
+
+**Tela de venda:**
+```
+[Finalizar Venda]
+Total: R$ 51,80
+Forma: [Dinheiro ▼]
+[Confirmar] → Gera cupom simples
+```
+
+### **VERSÃO 1.5 (Com notas via API):**
+```
+✅ Tudo da v1.0
+✅ Campos fiscais obrigatórios (se nota ativada)
+✅ Integração com API
+✅ Armazenamento de XML
+```
+
+**Tela de venda:**
+```
+[Finalizar Venda]
+Total: R$ 51,80
+Forma: [Dinheiro ▼]
+CPF/CNPJ: _______ (opcional)
+☑️ Emitir NFC-e
+
+[Confirmar] → Se marcado: emite nota via API
+            → Se não: cupom simples
+
+📊 Vantagens da abordagem híbrida:
+Para você (desenvolvedor):
+
+✅ Lança rápido no mercado
+✅ Coleta feedback antes de complexificar
+✅ Estrutura escalável desde o início
+✅ Pode ativar nota por cliente (freemium)
+
+
+VIEW DO AGENTE ( RELATÒRIO DIÀRIO)
+sql-- ==========================================
+-- VIEW 1: Insights Diários (atualiza 1x/dia)
+-- ==========================================
+CREATE MATERIALIZED VIEW insights_diarios AS
+SELECT 
+  DATE(data_hora) as data,
+  
+  -- Vendas
+  COUNT(*) as num_vendas,
+  SUM(valor_final) as faturamento,
+  AVG(valor_final) as ticket_medio,
+  MAX(valor_final) as maior_venda,
+  
+  -- Margem
+  SUM(valor_final - COALESCE((
+    SELECT SUM(i.custo_unitario * i.quantidade)
+    FROM itens_venda i
+    WHERE i.venda_id = v.id
+  ), 0)) as lucro_bruto,
+  
+  -- Produtos
+  COUNT(DISTINCT iv.produto_id) as produtos_diferentes,
+  SUM(iv.quantidade) as itens_vendidos,
+  
+  -- Cliente
+  COUNT(DISTINCT CASE WHEN cpf_cliente IS NOT NULL 
+        THEN cpf_cliente END) as clientes_identificados,
+  
+  -- Horários
+  EXTRACT(HOUR FROM data_hora) as hora_pico,
+  
+  -- Comparações
+  LAG(SUM(valor_final)) OVER (ORDER BY DATE(data_hora)) as faturamento_dia_anterior
+
+FROM vendas v
+LEFT JOIN itens_venda iv ON v.id = iv.venda_id
+WHERE cancelada = false
+GROUP BY DATE(data_hora);
+
+CREATE UNIQUE INDEX idx_insights_data ON insights_diarios(data);
+
+-- Atualizar diariamente às 00:05
+REFRESH MATERIALIZED VIEW CONCURRENTLY insights_diarios;
+
+
+-- ==========================================
+-- VIEW 2: Produtos Performance
+-- ==========================================
+CREATE MATERIALIZED VIEW produtos_performance AS
+SELECT 
+  p.id,
+  p.descricao,
+  p.categoria,
+  
+  -- Vendas últimos 30 dias
+  COUNT(iv.id) as vendas_30d,
+  SUM(iv.quantidade) as unidades_vendidas_30d,
+  SUM(iv.preco_total) as faturamento_30d,
+  AVG(iv.preco_unitario) as preco_medio_30d,
+  
+  -- Margem
+  AVG((iv.preco_unitario - iv.custo_unitario) / 
+      NULLIF(iv.preco_unitario, 0) * 100) as margem_media,
+  
+  -- Estoque
+  p.estoque_atual,
+  p.estoque_minimo,
+  CASE 
+    WHEN SUM(iv.quantidade) > 0 
+    THEN p.estoque_atual / (SUM(iv.quantidade) / 30.0)
+    ELSE 999
+  END as dias_estoque,
+  
+  -- Alertas
+  CASE WHEN p.estoque_atual < p.estoque_minimo 
+       THEN true ELSE false END as alerta_estoque,
+  CASE WHEN COUNT(iv.id) = 0 
+       THEN true ELSE false END as produto_parado,
+  
+  -- Última venda
+  MAX(v.data_hora) as ultima_venda
+
+FROM produtos p
+LEFT JOIN itens_venda iv ON p.id = iv.produto_id
+LEFT JOIN vendas v ON iv.venda_id = v.id 
+  AND v.data_hora >= NOW() - INTERVAL '30 days'
+  AND v.cancelada = false
+GROUP BY p.id;
+
+CREATE UNIQUE INDEX idx_perf_produto ON produtos_performance(id);
+
+
+PROMPT PARA IA (exemplo de insights)
+python# Dados que você vai passar para a IA via embedding
+
+def gerar_insights_contexto(mercadinho_id):
+    """Monta contexto para LLM gerar insights"""
+    
+    query = """
+    SELECT 
+      -- Hoje
+      (SELECT faturamento FROM insights_diarios 
+       WHERE data = CURRENT_DATE) as fat_hoje,
+      
+      -- Ontem
+      (SELECT faturamento FROM insights_diarios 
+       WHERE data = CURRENT_DATE - 1) as fat_ontem,
+      
+      -- Semana passada
+      (SELECT AVG(faturamento) FROM insights_diarios 
+       WHERE data >= CURRENT_DATE - 7) as media_7d,
+      
+      -- Produtos em alerta
+      (SELECT COUNT(*) FROM produtos_performance 
+       WHERE alerta_estoque = true) as produtos_estoque_baixo,
+      
+      -- Produtos parados
+      (SELECT COUNT(*) FROM produtos_performance 
+       WHERE produto_parado = true) as produtos_sem_giro,
+      
+      -- Melhor produto
+      (SELECT descricao FROM produtos_performance 
+       ORDER BY faturamento_30d DESC LIMIT 1) as top_produto,
+      
+      -- Horário pico
+      (SELECT hora_pico FROM insights_diarios 
+       WHERE data = CURRENT_DATE) as horario_pico
+    """
+    
+    dados = executar_query(query)
+    
+    # Prompt para IA
+    prompt = f"""
+    Você é um analista de negócios para um pequeno mercado.
+    
+    Dados de hoje:
+    - Faturamento: R$ {dados['fat_hoje']:.2f}
+    - Comparado a ontem: {((dados['fat_hoje']/dados['fat_ontem']-1)*100):.1f}%
+    - Média últimos 7 dias: R$ {dados['media_7d']:.2f}
+    - Produtos com estoque baixo: {dados['produtos_estoque_baixo']}
+    - Produtos parados (sem venda em 30d): {dados['produtos_sem_giro']}
+    - Produto mais vendido: {dados['top_produto']}
+    - Horário de pico: {dados['horario_pico']}h
+    
+    Gere 3 insights acionáveis para o dono do mercado:
+    1. Um sobre vendas/faturamento
+    2. Um sobre estoque/produtos
+    3. Uma recomendação de ação imediata
+    
+    Seja direto, prático e focado em aumentar lucro.
+    """
+    
+    return prompt
+
+
+    ┌─────────────────────────────────────────────────────────┐
+│                    FRONTEND (React/Next.js)             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │   PDV    │  │ Estoque  │  │ Insights │              │
+│ Kleiton/Durval │  Cliente    │  │   IA  │              │
+│  └──────────┘  └──────────┘  └──────────┘              │
+└─────────────────────────────────────────────────────────┘
+                          │ REST API
+┌─────────────────────────────────────────────────────────┐
+│                 BACKEND (Node.js/Python)                │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │           API Routes (Express/FastAPI)           │   │
+│  └──────────────────────────────────────────────────┘   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │ Business │  │  AI      │  │  NFC-e   │              │
+│  │  Logic   │  │ Service  │  │ Service  │              │
+│  └──────────┘  └──────────┘  └──────────┘              │
+└─────────────────────────────────────────────────────────┘
+         │                │                │
+         ▼                ▼                ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  PostgreSQL  │  │  API (Custo) │  │  NFe.io API  │
+│   supabase   │  │              │  │              │
+└──────────────┘  └──────────────┘  └──────────────┘
