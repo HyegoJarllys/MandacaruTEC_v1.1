@@ -29,6 +29,8 @@ Screenshots
 -----------
 ![Tela Principal](https://github.com/user-attachments/assets/a1208e3b-9996-4d15-9672-20d68b014715)
 ![Atualização da Interface](https://github.com/user-attachments/assets/85eea441-86c6-47db-a530-46546b37acd3)
+![Screenshot_2](https://github.com/user-attachments/assets/df7ebc4f-3ee1-4548-a09e-ceeac31f7b79)
+
 
 Tecnologias
 -----------
