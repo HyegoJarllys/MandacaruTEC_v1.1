@@ -9,32 +9,50 @@ from db import get_connection
 #  AJUSTE AUTOMÁTICO DO BANCO (EVITA "no such column")
 # --------------------------------------------------------
 def ensure_columns():
-    """Garante que a tabela produtos tenha todas as colunas novas
-       e que a tabela categorias exista."""
+    """Garante que a tabela produtos exista e tenha todas as colunas."""
     try:
         conn = get_connection()
         cur = conn.cursor()
 
-        # Verifica colunas da tabela produtos
-        cur.execute("PRAGMA table_info(produtos)")
-        cols = {row[1] for row in cur.fetchall()}
+        # 1. Verifica se a tabela existe
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='produtos'")
+        if not cur.fetchone():
+            # Tabela não existe: cria do zero com tudo
+            cur.execute("""
+                CREATE TABLE produtos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    codigo_barras TEXT NOT NULL UNIQUE,
+                    nome TEXT NOT NULL,
+                    preco_venda REAL DEFAULT 0,
+                    preco_custo REAL DEFAULT 0,
+                    validade TEXT DEFAULT '0000-00-00',
+                    estoque_atual INTEGER DEFAULT 0,
+                    estoque_minimo INTEGER DEFAULT 0,
+                    unidade_venda TEXT DEFAULT 'UNIDADE',
+                    categoria TEXT DEFAULT '',
+                    descricao TEXT DEFAULT ''
+                );
+            """)
+        else:
+            # 2. Tabela existe: verifica colunas e adiciona as faltantes
+            cur.execute("PRAGMA table_info(produtos)")
+            cols = {row[1] for row in cur.fetchall()}
 
-        def add_column(name, type_sql, default=None):
-            if name not in cols:
-                sql = f"ALTER TABLE produtos ADD COLUMN {name} {type_sql}"
-                if default is not None:
-                    sql += f" DEFAULT {default}"
-                cur.execute(sql)
+            def add_column(name, type_sql, default=None):
+                if name not in cols:
+                    sql = f"ALTER TABLE produtos ADD COLUMN {name} {type_sql}"
+                    if default is not None:
+                        sql += f" DEFAULT {default}"
+                    cur.execute(sql)
 
-        # Colunas necessárias
-        add_column("preco_venda", "REAL", 0)
-        add_column("preco_custo", "REAL", 0)
-        add_column("validade", "TEXT", "'0000-00-00'")
-        add_column("estoque_atual", "INTEGER", 0)
-        add_column("estoque_minimo", "INTEGER", 0)
-        add_column("unidade_venda", "TEXT", "'UNIDADE'")
-        add_column("categoria", "TEXT", "''")
-        add_column("descricao", "TEXT", "''")
+            add_column("preco_venda", "REAL", 0)
+            add_column("preco_custo", "REAL", 0)
+            add_column("validade", "TEXT", "'0000-00-00'")
+            add_column("estoque_atual", "INTEGER", 0)
+            add_column("estoque_minimo", "INTEGER", 0)
+            add_column("unidade_venda", "TEXT", "'UNIDADE'")
+            add_column("categoria", "TEXT", "''")
+            add_column("descricao", "TEXT", "''")
 
         # Tabela de categorias
         cur.execute(
@@ -329,38 +347,48 @@ class CadastroProdutosApp:
     def _carregar_produtos(self):
         self.tree.delete(*self.tree.get_children())
         try:
-            conn = get_connection()
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT codigo_barras, nome, preco_venda, estoque_atual, validade, categoria
-                  FROM produtos
-                 ORDER BY nome;
-                """
-            )
-            for row in cur.fetchall():
-                self.tree.insert(
-                    "",
-                    "end",
-                    values=(
-                        row["codigo_barras"],
-                        row["nome"],
-                        f"R$ {row['preco_venda']:.2f}",
-                        row["estoque_atual"],
-                        row["validade"],
-                        row["categoria"] or "",
-                    ),
-                )
-            conn.close()
+            self._carregar_produtos_db()
         except sqlite3.OperationalError as e:
-            # Se ainda der "no such column", força ajuste e tenta de novo
+            # Se der erro de coluna, tenta ajustar UMA vez
             if "no such column" in str(e):
+                print("Detectado erro de coluna. Tentando ajustar...")
                 ensure_columns()
-                self._carregar_produtos()
+                # Tenta carregar novamente, mas sem recursão infinita (se falhar, cai no except genérico ou crasha, mas não loopa)
+                try:
+                    self._carregar_produtos_db()
+                except Exception as e2:
+                     messagebox.showerror("Erro Fatal", f"Não foi possível corrigir o banco de dados:\n{e2}")
             else:
                 messagebox.showerror("Erro", f"Erro ao carregar produtos:\n{e}")
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao carregar produtos:\n{e}")
+
+    def _carregar_produtos_db(self):
+        """Método auxiliar para fazer a query, separado para facilitar reuso sem recursão completa."""
+        self.tree.delete(*self.tree.get_children())
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT codigo_barras, nome, preco_venda, estoque_atual, validade, categoria
+              FROM produtos
+             ORDER BY nome;
+            """
+        )
+        for row in cur.fetchall():
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    row["codigo_barras"],
+                    row["nome"],
+                    f"R$ {row['preco_venda']:.2f}",
+                    row["estoque_atual"],
+                    row["validade"],
+                    row["categoria"] or "",
+                ),
+            )
+        conn.close()
 
     def _buscar_por_codigo(self):
         codigo = self.var_codigo.get().strip()

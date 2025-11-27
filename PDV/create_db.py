@@ -7,9 +7,16 @@ def criar_tabelas():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo_barras TEXT NOT NULL,
+            codigo_barras TEXT NOT NULL UNIQUE,
             nome TEXT NOT NULL,
-            preco REAL NOT NULL
+            preco_venda REAL DEFAULT 0,
+            preco_custo REAL DEFAULT 0,
+            validade TEXT DEFAULT '0000-00-00',
+            estoque_atual INTEGER DEFAULT 0,
+            estoque_minimo INTEGER DEFAULT 0,
+            unidade_venda TEXT DEFAULT 'UNIDADE',
+            categoria TEXT DEFAULT '',
+            descricao TEXT DEFAULT ''
         );
     """)
 
